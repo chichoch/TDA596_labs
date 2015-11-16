@@ -54,11 +54,36 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
     else:
       send_to_local_ports(message)
 
+  #On-going election
   elif msgheader.startswith('ELECTION'):
     initiator = msgheader[msgheader.find('i')+1:msgheader.find('l')-1]
+    #If we are leader
     if(initiator == msgheader['processID'])
-      #Stop election
-      #Select leader
+      #Get the election winner from the message
+      leader = msgheader[:msgheader.find('l')+1]
+      #Start letting all nodes know about the new leader
+      leaderMessage = "LEADER:i" + initiator + 'l' + leader
+      mycontext['leader'] = leader
+      send_message(mycontext['next_vessel_ip'], mycontext['next_vessel_port'], leaderMessage)
+    else:
+      #Compare our random to leader
+      leaderRand = msgheader[msgheader.find('/'):]
+      if(mycontext['random'] > float(leaderRand)):
+        #Continue election with this as leader
+        newMessage = msgheader[:msgheader.find('l')+1] + mycontext['processID'] + '/' str(mycontext['random'])
+        send_message(mycontext['next_vessel_ip'], mycontext['next_vessel_port'], newMessage)
+      else:
+        #Continue election with previous leader
+        send_message(mycontext['next_vessel_ip'], mycontext['next_vessel_port'], msgheader)
+
+  #A leader has been selected
+  elif msgheader.startswith('LEADER')
+    initiator = msgheader[msgheader.find('i')+1:msgheader.find('l')-1]
+    if(initiator != msgheader['processID'])
+      mycontext['leader'] = msgheader[msgheader.find('l') + 1:]
+      send_message(mycontext['next_vessel_ip'], mycontext['next_vessel_port'], msgheader)
+
+
 
   else:
     # Insert the message to the html. 
