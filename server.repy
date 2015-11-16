@@ -1,23 +1,53 @@
+# Inserts a new message into the stored html file  
+def insert_message(message):
+  if message != '':  
+    index = mycontext['index']
+    mycontext['index'] = index[:index.find('<p>')+3] + '<p>' + message + '</p>' + index[index.find('<p>')+3:]
+
+# Sends a message to all vessels (except this)
+def send_to_vessels(message):
+  for vessel in mycontext['vessels']:
+      if (vessel != getmyip()):
+        send_message(vessel, mycontext['port'], message)
+        
+# Sends a message to all ports (except this)
+def send_to_local_ports(message):
+  for portnr in mycontext['localports']:
+    if(int(portnr) != mycontext['port']):
+      send_message('127.0.0.1', int(portnr), message)
+
+# Sends a message to specific ip:port
+def send_message(ip, port, message):
+  try:
+    socket = openconn(ip, int(port))
+    socket.send(message)
+    socket.close()
+  except Exception, e:
+    print '-------SOCKET ERROR------\n' + str(e)
+
 def local_get_next_vessel():
   next_vessel_pos = (mycontext['localports'].index(str(mycontext['port'])) + 1) % (len(mycontext['localports']))
   mycontext['next_vessel_ip'] = '127.0.0.1'
   mycontext['next_vessel_port'] = mycontext['localports'][next_vessel_pos]
-  mycontext['random'] = str(randomfloat())
   
   #message = "ELECTION:i" + mycontext['processID'] + 'l' + mycontext['processID'] + '/' + mycontext['random']
   #initiator = message[message.find('i')+1:message.find('l')-1]
   #print(initiator)
 
 def start_election():
-  #ELECTION:i127.0.0.1:12345l127.0.0.1/0.1234353467
+  #ELECTION:i127.0.0.1:12345l127.0.0.1:12345/0.1234353467
   
   processId = mycontext['ip'] + ':' + str(mycontext['port'])
-  electionMessage = "ELECTION:i" + processId + 'l' + processId + '/' + mycontext['random']
+  electionMessage = "ELECTION:i" + processId + 'l' + processId + '/' + str(mycontext['random'])
 
   send_message(mycontext['next_vessel_ip'], mycontext['next_vessel_port'], electionMessage)
 
 
 def board(ip, port, sockobj, thiscommhandle, listencommhandle):
+  lock = getlock()
+  lock.acquire() 
+  mycontext['boardcounter'] += 1
+  print mycontext['boardcounter']
   try:
     msgheader = sockobj.recv(1024) # Receive message, 
   except Exception, e:
@@ -56,43 +86,49 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
 
   #On-going election
   elif msgheader.startswith('ELECTION'):
-    initiator = msgheader[msgheader.find('i')+1:msgheader.find('l')-1]
+    print "ELECTION: " + msgheader
+    initiator = msgheader[msgheader.find('i')+1:msgheader.find('l')]
     #If we are leader
-    if(initiator == msgheader['processID'])
+    if initiator == mycontext['processID']:
       #Get the election winner from the message
-      leader = msgheader[:msgheader.find('l')+1]
+      leader = msgheader[msgheader.find('l')+1:msgheader.find('/')]
       #Start letting all nodes know about the new leader
       leaderMessage = "LEADER:i" + initiator + 'l' + leader
       mycontext['leader'] = leader
       send_message(mycontext['next_vessel_ip'], mycontext['next_vessel_port'], leaderMessage)
     else:
       #Compare our random to leader
-      leaderRand = msgheader[msgheader.find('/'):]
-      if(mycontext['random'] > float(leaderRand)):
+      leaderRand = msgheader[msgheader.find('/')+1:]
+      if mycontext['random'] > float(leaderRand):
         #Continue election with this as leader
-        newMessage = msgheader[:msgheader.find('l')+1] + mycontext['processID'] + '/' str(mycontext['random'])
+        newMessage = msgheader[:msgheader.find('l')+1] + mycontext['processID'] + '/' + str(mycontext['random'])
+        print "NEW LEADER: " + newMessage
         send_message(mycontext['next_vessel_ip'], mycontext['next_vessel_port'], newMessage)
       else:
         #Continue election with previous leader
         send_message(mycontext['next_vessel_ip'], mycontext['next_vessel_port'], msgheader)
 
   #A leader has been selected
-  elif msgheader.startswith('LEADER')
-    initiator = msgheader[msgheader.find('i')+1:msgheader.find('l')-1]
-    if(initiator != msgheader['processID'])
+  elif msgheader.startswith('LEADER'):
+    initiator = msgheader[msgheader.find('i')+1:msgheader.find('l')]
+    if initiator != mycontext['processID']:
       mycontext['leader'] = msgheader[msgheader.find('l') + 1:]
       send_message(mycontext['next_vessel_ip'], mycontext['next_vessel_port'], msgheader)
-
-
+    #TODO REMOVE
+    print "------- LEADER: " +  mycontext['leader'] + "This vessel: " + mycontext['processID']
 
   else:
     # Insert the message to the html. 
     insert_message(msgheader)
+
+  lock.release()
   
 if callfunc == 'initialize':
   if len(callargs) != 2:
     raise Exception("Need two call arguments")
 
+  #TODO REMOVE
+  mycontext['boardcounter'] = 0
   # Read and store the html file
   mycontext['index'] = open('index.html', 'r').read()
   # Store which connection type used. (remote or local) 
@@ -100,6 +136,10 @@ if callfunc == 'initialize':
   # Store port used.
   port = int(callargs[1])
   mycontext['port'] = int(callargs[1])
+
+  mycontext['random'] = randomfloat()
+  print mycontext['random']
+
 
   #Generate random number
   #mycontext['random'] = randomfloat() * 
@@ -130,32 +170,7 @@ if callfunc == 'initialize':
   else:
     raise Exception("First argument needs to be 'remote' or 'local'")
 
+  settimer(3, start_election, [])
+  #start_election()
   # Whenever this vessel gets a connection on its IPaddress:port it'll call function board
   listencommhandle = waitforconn(ip,port,board)
-
-# Inserts a new message into the stored html file  
-def insert_message(message):
-  if message != '':  
-    index = mycontext['index']
-    mycontext['index'] = index[:index.find('<p>')+3] + '<p>' + message + '</p>' + index[index.find('<p>')+3:]
-
-# Sends a message to all vessels (except this)
-def send_to_vessels(message):
-  for vessel in mycontext['vessels']:
-      if (vessel != getmyip()):
-        send_message(vessel, mycontext['port'], message)
-        
-# Sends a message to all ports (except this)
-def send_to_local_ports(message):
-  for portnr in mycontext['localports']:
-    if(int(portnr) != mycontext['port']):
-      send_message('127.0.0.1', int(portnr), message)
-
-# Sends a message to specific ip:port
-def send_message(ip, port, message):
-  try:
-    socket = openconn(ip, port)
-    socket.send(message)
-    socket.close()
-  except Exception, e:
-    print '-------SOCKET ERROR------\n' + str(e)
