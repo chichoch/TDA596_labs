@@ -1,0 +1,61 @@
+def board(ip, port, sockobj, thiscommhandle, listencommhandle):
+  msgheader = sockobj.recv(1024) # Receive message, 
+  
+  # React depending on message type: HTTP GET or POST, or some other type of communication.
+  if msgheader.startswith( 'GET' ):
+    htmlresponse = mycontext['index']
+    sockobj.send("HTTP/1.1 200 OK\r\nContent-type: text/html\r\n" + \
+    "Content-length: %i\r\n\r\n%s" % (len(htmlresponse), htmlresponse))
+    #stopcomm(thiscommhandle)   
+  elif msgheader.startswith( 'POST' ):
+    comment = msgheader[msgheader.find("comment=")+8:]
+    
+    #Save the comment to the html-file:
+    insert_message(comment)
+    
+    response = mycontext['index']
+    
+    #Send the complete file to the socket.
+    sockobj.send("HTTP/1.1 200 OK\r\nContent-type: text/html\r\n" + \
+    "Content-length: %i\r\n\r\n%s" % (len(response), response))
+    stopcomm(thiscommhandle)
+    
+    #Send comment to the other computers. 
+    for vessel in mycontext['vessels']:
+      if (vessel[0] != getmyip()):
+        #print(str(mycontext['port']) +" Vessel: " + str(vessel[1]))
+        s = openconn(vessel[0],vessel[1],timeout=100)
+        s.send(comment)
+  
+  else:
+    print "MESSAGE?!?!:\n " + msgheader
+    #Save the message to the html:
+    insert_message(msgheader)
+    
+if callfunc == 'initialize':
+  mycontext['index'] = open('sampleBoard2015minimal.html', 'r').read()
+  mycontext['vessels'] = [['222.197.180.139',63119], 
+                          ['206.12.16.154',63119],
+                          ['128.42.142.45',63119]]
+  if len(callargs) > 1:
+    raise Exception("Too many call arguments")
+
+  # Running remotely (assuming that we pass input argument only remotely):
+  # whenever this vessel gets a connection on its IPaddress:Clearinghouseport it'll call function board
+  elif len(callargs) == 1:
+    port = int(callargs[0])
+    mycontext['port'] = int(callargs[0])
+    #TODO Use this line instead:
+    ip = getmyip()
+    #ip = '127.0.0.1'
+
+  # Running locally:
+  # whenever we get a connection on 127.0.0.1:12345 we'll call board
+  else:
+    port = 12345
+    ip = '127.0.0.1'
+  listencommhandle = waitforconn(ip,port,board)
+  
+def insert_message(message):
+  index = mycontext['index']
+  mycontext['index'] = index[:index.find('<p>')+3] + '<p>' + message + '</p>' + index[index.find('<p>')+3:]
