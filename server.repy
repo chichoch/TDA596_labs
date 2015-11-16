@@ -2,9 +2,13 @@ def local_get_next_vessel():
   next_vessel_pos = (mycontext['localports'].index(str(mycontext['port'])) + 1) % (len(mycontext['localports']))
   mycontext['next_vessel_ip'] = '127.0.0.1'
   mycontext['next_vessel_port'] = mycontext['localports'][next_vessel_pos]
-  mycontext['random'] = randomfloat()
+  mycontext['random'] = str(randomfloat())
+  
+  #message = "ELECTION:i" + mycontext['processID'] + 'l' + mycontext['processID'] + '/' + mycontext['random']
+  #initiator = message[message.find('i')+1:message.find('l')-1]
+  #print(initiator)
 
-def start election:
+def start_election():
   #ELECTION:i127.0.0.1:12345l127.0.0.1/0.1234353467
   
   processId = mycontext['ip'] + ':' + str(mycontext['port'])
@@ -49,7 +53,13 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
       send_to_vessels(message) 
     else:
       send_to_local_ports(message)
-     
+
+  elif msgheader.startswith('ELECTION'):
+    initiator = msgheader[msgheader.find('i')+1:msgheader.find('l')-1]
+    if(initiator == msgheader['processID'])
+      #Stop election
+      #Select leader
+
   else:
     # Insert the message to the html. 
     insert_message(msgheader)
@@ -77,18 +87,24 @@ if callfunc == 'initialize':
     ip = getmyip()
     mycontext['ip'] = getmyip()
 
+    #Store process-id
+    mycontext['processID'] = mycontext['ip'] + ':' + str(mycontext['port'])
+
   # Running locally.
   elif callargs[0] == 'local':
     # Read and store the ports for running instances on localhost.
     mycontext['localports'] = open('localports.txt', 'r').read().split()
     ip = '127.0.0.1'
     mycontext['ip'] = '127.0.0.1'
-
+    
+    #Store process-id
+    mycontext['processID'] = mycontext['ip'] + ':' + str(mycontext['port'])
+    
     local_get_next_vessel()
   
   else:
     raise Exception("First argument needs to be 'remote' or 'local'")
-    
+
   # Whenever this vessel gets a connection on its IPaddress:port it'll call function board
   listencommhandle = waitforconn(ip,port,board)
 
