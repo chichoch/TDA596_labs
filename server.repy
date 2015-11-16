@@ -1,7 +1,17 @@
 def local_get_next_vessel():
   next_vessel_pos = (mycontext['localports'].index(str(mycontext['port'])) + 1) % (len(mycontext['localports']))
-  mycontext['next_vessel'] = '127.0.0.1:' + mycontext['localports'][next_vessel_pos]
-  print(next_vessel)
+  mycontext['next_vessel_ip'] = '127.0.0.1'
+  mycontext['next_vessel_port'] = mycontext['localports'][next_vessel_pos]
+  mycontext['random'] = randomfloat()
+
+def start election:
+  #ELECTION:i127.0.0.1:12345l127.0.0.1/0.1234353467
+  
+  processId = mycontext['ip'] + ':' + str(mycontext['port'])
+  electionMessage = "ELECTION:i" + processId + 'l' + processId + '/' + mycontext['random']
+
+  send_message(mycontext['next_vessel_ip'], mycontext['next_vessel_port'], electionMessage)
+
 
 def board(ip, port, sockobj, thiscommhandle, listencommhandle):
   try:
@@ -56,20 +66,25 @@ if callfunc == 'initialize':
   port = int(callargs[1])
   mycontext['port'] = int(callargs[1])
 
+  #Generate random number
+  #mycontext['random'] = randomfloat() * 
+
   
   # Running remotely: 
   if callargs[0] == 'remote':
     # Read and store ip-addresses of other vessels
     mycontext['vessels'] = open('ipaddresses.txt','r').read().split()  
     ip = getmyip()
+    mycontext['ip'] = getmyip()
 
   # Running locally.
   elif callargs[0] == 'local':
     # Read and store the ports for running instances on localhost.
     mycontext['localports'] = open('localports.txt', 'r').read().split()
     ip = '127.0.0.1'
+    mycontext['ip'] = '127.0.0.1'
 
-  local_get_next_vessel()
+    local_get_next_vessel()
   
   else:
     raise Exception("First argument needs to be 'remote' or 'local'")
