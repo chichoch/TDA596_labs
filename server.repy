@@ -1,3 +1,8 @@
+def local_get_next_vessel():
+  next_vessel_pos = (mycontext['localports'].index(str(mycontext['port'])) + 1) % (len(mycontext['localports']))
+  mycontext['next_vessel'] = '127.0.0.1:' + mycontext['localports'][next_vessel_pos]
+  print(next_vessel)
+
 def board(ip, port, sockobj, thiscommhandle, listencommhandle):
   try:
     msgheader = sockobj.recv(1024) # Receive message, 
@@ -64,6 +69,8 @@ if callfunc == 'initialize':
     mycontext['localports'] = open('localports.txt', 'r').read().split()
     ip = '127.0.0.1'
 
+  local_get_next_vessel()
+  
   else:
     raise Exception("First argument needs to be 'remote' or 'local'")
     
