@@ -47,7 +47,7 @@ def start_election():
 
   send_message(mycontext['next_vessel_ip'], mycontext['next_vessel_port'], electionMessage)
 
-def send_ok():
+def send_ok(sockobj, thiscommhandle):
   # Get the stored html file
   htmlresponse = mycontext['index']
   # Send the html file to the socket
@@ -68,15 +68,17 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
 
   # React depending on message type: HTTP GET or POST, or some other type of communication.
   if msgheader.startswith( 'GET' ):
-    send_ok()   
+    send_ok(sockobj, thiscommhandle)   
   
   elif msgheader.startswith( 'POST' ):
     leader = mycontext['leader']
     if leader != mycontext['processID']:
       #Send the message to leader.
       send_message(leader[:leader.find(':')], leader[leader.find(':')+1:], msgheader)
+      #TODO Now we sleep for some time before loading page.............
       sleep(0.5)
-      send_ok()
+      send_ok(sockobj, thiscommhandle)
+      #settimer(0.5, send_ok, [sockobj,thiscommhandle])
 
     else:
       #Get the message from the post
@@ -85,7 +87,7 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
       #Insert the message to the html file
       insert_message(message)
       
-      send_ok()
+      send_ok(sockobj, thiscommhandle)
 
       #Send message to vessels or ports, depending on which connection is used.
       if mycontext['connection'] == 'remote':
@@ -99,7 +101,7 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
     #Insert the message to the html file
     insert_message(message)
     
-    send_ok()
+    send_ok(sockobj, thiscommhandle)
 
   #On-going election
   elif msgheader.startswith('ELECTION'):
@@ -135,8 +137,8 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
 
   else:
     # Shouldn't happen.
-    raise Exception("Can't recognize messageheader")
-
+    #raise Exception("Can't recognize messageheader")
+    print "------------------------ ERRORRRRRRR ----------\n\n\n " + msgheader + "\n"
   lock.release()
   
 
