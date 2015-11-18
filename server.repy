@@ -86,7 +86,6 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
 
   #On-going election
   elif msgheader.startswith('ELECTION'):
-    print "ELECTION: " + msgheader
     initiator = msgheader[msgheader.find('i')+1:msgheader.find('l')]
     #If we are leader
     if initiator == mycontext['processID']:
@@ -123,6 +122,8 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
 
   lock.release()
   
+
+# ------------------ INITIALIZE --------------------------------
 if callfunc == 'initialize':
   if len(callargs) != 2:
     raise Exception("Need two call arguments")
@@ -138,6 +139,7 @@ if callfunc == 'initialize':
   mycontext['port'] = int(callargs[1])
 
   mycontext['random'] = randomfloat()
+  #TODO Remove
   print mycontext['random']
 
 
@@ -170,7 +172,8 @@ if callfunc == 'initialize':
   else:
     raise Exception("First argument needs to be 'remote' or 'local'")
 
-  settimer(3, start_election, [])
-  #start_election()
+  #Start selection, but first wait 1 sec to let all intances be initiated.
+  settimer(1, start_election, [])
+
   # Whenever this vessel gets a connection on its IPaddress:port it'll call function board
   listencommhandle = waitforconn(ip,port,board)
