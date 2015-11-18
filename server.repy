@@ -27,12 +27,17 @@ def send_message(ip, port, message):
 
 def local_get_next_vessel():
   next_vessel_pos = (mycontext['localports'].index(str(mycontext['port'])) + 1) % (len(mycontext['localports']))
-  mycontext['next_vessel_ip'] = '127.0.0.1'
+  mycontext['next_vessel_ip'] = mycontext['ip']
   mycontext['next_vessel_port'] = mycontext['localports'][next_vessel_pos]
   
   #message = "ELECTION:i" + mycontext['processID'] + 'l' + mycontext['processID'] + '/' + mycontext['random']
   #initiator = message[message.find('i')+1:message.find('l')-1]
   #print(initiator)
+
+def remote_get_next_vessel():
+  next_vessel_pos = (mycontext['vessels'].index(mycontext['ip']) + 1) % (len(mycontext['vessels']))
+  mycontext['next_vessel_ip'] = mycontext['vessels'][next_vessel_pos]
+  mycontext['next_vessel_port'] = mycontext['port']
 
 def start_election():
   #ELECTION:i127.0.0.1:12345l127.0.0.1:12345/0.1234353467
@@ -175,6 +180,7 @@ if callfunc == 'initialize':
 
     #Store process-id
     mycontext['processID'] = mycontext['ip'] + ':' + str(mycontext['port'])
+    remote_get_next_vessel()
 
   # Running locally.
   elif callargs[0] == 'local':
