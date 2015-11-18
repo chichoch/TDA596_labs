@@ -64,25 +64,30 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
     stopcomm(thiscommhandle)   
   
   elif msgheader.startswith( 'POST' ):
-    #Get the message from the post
-    message = msgheader[msgheader.find("comment=")+8:]
-    
-    #Insert the message to the html file
-    insert_message(message)
-    
-    #Get the stored html file
-    response = mycontext['index']
-    
-    #Send the complete file to the socket.
-    sockobj.send("HTTP/1.1 200 OK\r\nContent-type: text/html\r\n" + \
-    "Content-length: %i\r\n\r\n%s" % (len(response), response))
-    stopcomm(thiscommhandle)
-
-    #Send message to vessels or ports, depending on which connection is used.
-    if mycontext['connection'] == 'remote':
-      send_to_vessels(message) 
+    leader = mycontext['leader']
+    if leader != mycontext['processID']:
+      #Send the message to leader.
+      send_message(leader[:leader.find(':')], leader[leader.find(':')+1:], msgheader)
     else:
-      send_to_local_ports(message)
+      #Get the message from the post
+      message = msgheader[msgheader.find("comment=")+8:]
+      
+      #Insert the message to the html file
+      insert_message(message)
+      
+      #Get the stored html file
+      response = mycontext['index']
+      
+      #Send the complete file to the socket.
+      sockobj.send("HTTP/1.1 200 OK\r\nContent-type: text/html\r\n" + \
+      "Content-length: %i\r\n\r\n%s" % (len(response), response))
+      stopcomm(thiscommhandle)
+
+      #Send message to vessels or ports, depending on which connection is used.
+      if mycontext['connection'] == 'remote':
+        send_to_vessels(message) 
+      else:
+        send_to_local_ports(message)
 
   #On-going election
   elif msgheader.startswith('ELECTION'):
@@ -118,6 +123,7 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
 
   else:
     # Insert the message to the html. 
+    print msgheader
     insert_message(msgheader)
 
   lock.release()
