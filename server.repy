@@ -44,7 +44,7 @@ def remote_get_next_vessel():
 
 def start_election():
   #ELECTION:i127.0.0.1:12345l127.0.0.1:12345/0.1234353467
-  electionMessage = "ELECTION:i" + mycontext['processID'] + 'l' + processId + '/' + str(mycontext['random'])
+  electionMessage = "ELECTION:i" + mycontext['processID'] + 'l' + mycontext['processID'] + '/' + str(mycontext['random'])
   send_message(mycontext['next_vessel_ip'], mycontext['next_vessel_port'], electionMessage)
 
 def send_ok(sockobj, thiscommhandle):
