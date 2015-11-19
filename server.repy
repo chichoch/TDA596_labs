@@ -4,6 +4,9 @@ def insert_message(message):
     index = mycontext['index']
     mycontext['index'] = index[:index.find('<p>')+3] + '<p>' + message + '</p>' + index[index.find('<p>')+3:]
 
+def insert_leader(leader, randomnr):
+  index = mycontext['index']
+  mycontext['index'] = index[:index.find('leader_div')+12] + '<h3>Leader: ' + leader  + ' ' + str(randomnr) + '</h3>'+ index[index.find('leader_div')+12:]  
 # Sends a message to all vessels (except this)
 def send_to_vessels(message):
   for vessel in mycontext['vessels']:
@@ -56,9 +59,6 @@ def send_ok(sockobj, thiscommhandle):
   stopcomm(thiscommhandle)
 
 def board(ip, port, sockobj, thiscommhandle, listencommhandle):
-  #TODO THIS CREATES A NEW LOCK EVERY TIME!!!!
-  lock = getlock()
-  lock.acquire() 
   mycontext['boardcounter'] += 1
   print mycontext['processID'] + ": " + str(mycontext['boardcounter'])
   try:
@@ -73,12 +73,13 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
   
   elif msgheader.startswith( 'POST' ):
     leader = mycontext['leader']
+    #TODO Maybe do this in the specific cases?
+    mycontext['lock'].acquire()
     if leader != mycontext['processID']:
       print "Starting post"
       #Send the message to leader.
       send_message(leader[:leader.find(':')], leader[leader.find(':')+1:], msgheader)
       #TODO Now we sleep for some time before loading page.............
-      sleep(0.5)
       send_ok(sockobj, thiscommhandle)
 
       print "Post finished"
@@ -98,6 +99,7 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
         send_to_vessels("OK" + message) 
       else:
         send_to_local_ports("OK" + message)
+    mycontext['lock'].release()
 
   #OK recieved from the leader
   elif msgheader.startswith('OK'):
@@ -114,17 +116,18 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
   #On-going election
   elif msgheader.startswith('ELECTION'):
     initiator = msgheader[msgheader.find('i')+1:msgheader.find('l')]
+    leaderRand = msgheader[msgheader.find('/')+1:]
+
     #If we are leader
     if initiator == mycontext['processID']:
       #Get the election winner from the message
       leader = msgheader[msgheader.find('l')+1:msgheader.find('/')]
       #Start letting all nodes know about the new leader
-      leaderMessage = "LEADER:i" + initiator + 'l' + leader
+      leaderMessage = "LEADER:i" + initiator + 'l' + leader + '/' + leaderRand
       mycontext['leader'] = leader
       send_message(mycontext['next_vessel_ip'], mycontext['next_vessel_port'], leaderMessage)
     else:
       #Compare our random to leader
-      leaderRand = msgheader[msgheader.find('/')+1:]
       if mycontext['random'] > float(leaderRand):
         #Continue election with this as leader
         newMessage = msgheader[:msgheader.find('l')+1] + mycontext['processID'] + '/' + str(mycontext['random'])
@@ -141,9 +144,11 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
     #If we are not the initiator
     if initiator != mycontext['processID']:
       #Store the ip:port of the elected leader
-      mycontext['leader'] = msgheader[msgheader.find('l') + 1:]
+      mycontext['leader'] = msgheader[msgheader.find('l') + 1:msgheader.find('/')]
       #Continue sending the message to next vessel
       send_message(mycontext['next_vessel_ip'], mycontext['next_vessel_port'], msgheader)
+    else:
+      insert_leader(mycontext['leader'], msgheader[msgheader.find('/')+1:])
     #TODO REMOVE
     print "------- LEADER: " +  mycontext['leader'] + "This vessel: " + mycontext['processID']
 
@@ -151,7 +156,6 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
     # Shouldn't happen.
     #raise Exception("Can't recognize messageheader")
     print "------------------------ ERRORRRRRRR ----------\n\n\n " + msgheader + "\n"
-  lock.release()
   
 
 # ------------------ INITIALIZE --------------------------------
@@ -170,6 +174,8 @@ if callfunc == 'initialize':
   mycontext['port'] = int(callargs[1])
 
   mycontext['random'] = randomfloat()
+
+  mycontext['lock'] = getlock()
   #TODO Remove
   print mycontext['random']
 
