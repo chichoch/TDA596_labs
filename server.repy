@@ -56,6 +56,7 @@ def send_ok(sockobj, thiscommhandle):
   stopcomm(thiscommhandle)
 
 def board(ip, port, sockobj, thiscommhandle, listencommhandle):
+  #TODO THIS CREATES A NEW LOCK EVERY TIME!!!!
   lock = getlock()
   lock.acquire() 
   mycontext['boardcounter'] += 1
