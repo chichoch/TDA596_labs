@@ -41,12 +41,10 @@ def remote_get_next_vessel():
   mycontext['next_vessel_ip'] = mycontext['vessels'][next_vessel_pos]
   mycontext['next_vessel_port'] = mycontext['port']
 
+
 def start_election():
   #ELECTION:i127.0.0.1:12345l127.0.0.1:12345/0.1234353467
-  
-  processId = mycontext['ip'] + ':' + str(mycontext['port'])
-  electionMessage = "ELECTION:i" + processId + 'l' + processId + '/' + str(mycontext['random'])
-
+  electionMessage = "ELECTION:i" + mycontext['processID'] + 'l' + processId + '/' + str(mycontext['random'])
   send_message(mycontext['next_vessel_ip'], mycontext['next_vessel_port'], electionMessage)
 
 def send_ok(sockobj, thiscommhandle):
@@ -206,7 +204,7 @@ if callfunc == 'initialize':
     raise Exception("First argument needs to be 'remote' or 'local'")
 
   #Start selection, but first wait 1 sec to let all intances be initiated.
-  settimer(3, start_election, [])
+  settimer(1, start_election, [])
 
   # Whenever this vessel gets a connection on its IPaddress:port it'll call function board
   listencommhandle = waitforconn(ip,port,board)
