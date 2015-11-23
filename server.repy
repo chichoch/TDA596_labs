@@ -26,6 +26,8 @@ def send_message(ip, port, message):
     socket.send(message)
     socket.close()
   except Exception, e:
+    if str(e).find("Connection refused") != -1:
+      start_election()
     print '-------SOCKET ERROR------\n' + str(e)
 
 #Sets this vessels neighbour in the ring (for local)
@@ -33,17 +35,12 @@ def local_get_next_vessel():
   next_vessel_pos = (mycontext['localports'].index(str(mycontext['port'])) + 1) % (len(mycontext['localports']))
   mycontext['next_vessel_ip'] = mycontext['ip']
   mycontext['next_vessel_port'] = mycontext['localports'][next_vessel_pos]
-  
-  #message = "ELECTION:i" + mycontext['processID'] + 'l' + mycontext['processID'] + '/' + mycontext['random']
-  #initiator = message[message.find('i')+1:message.find('l')-1]
-  #print(initiator)
 
 #Sets this vessels neighbour in the ring (for remote)
 def remote_get_next_vessel():
   next_vessel_pos = (mycontext['vessels'].index(mycontext['ip']) + 1) % (len(mycontext['vessels']))
   mycontext['next_vessel_ip'] = mycontext['vessels'][next_vessel_pos]
   mycontext['next_vessel_port'] = mycontext['port']
-
 
 def start_election():
   #ELECTION:i127.0.0.1:12345l127.0.0.1:12345/0.1234353467
@@ -60,7 +57,6 @@ def send_ok(sockobj, thiscommhandle):
 
 def board(ip, port, sockobj, thiscommhandle, listencommhandle):
   mycontext['boardcounter'] += 1
-  print mycontext['processID'] + ": " + str(mycontext['boardcounter'])
   try:
     msgheader = sockobj.recv(1024) # Receive message, 
   except Exception, e:
@@ -76,14 +72,10 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
     #TODO Maybe do this in the specific cases?
     mycontext['lock'].acquire()
     if leader != mycontext['processID']:
-      print "Starting post"
       #Send the message to leader.
       send_message(leader[:leader.find(':')], leader[leader.find(':')+1:], msgheader)
       #TODO Now we sleep for some time before loading page.............
       send_ok(sockobj, thiscommhandle)
-
-      print "Post finished"
-      #settimer(0.5, send_ok, [sockobj,thiscommhandle])
 
     else:
       #Get the message from the post
@@ -103,11 +95,8 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
 
   #OK recieved from the leader
   elif msgheader.startswith('OK'):
-
-    print "OK recieved"
     #Pick out the message
     message = msgheader[msgheader.find('OK') + 2:]
-    print msgheader
     #Insert the message to the html file
     insert_message(message)
     
@@ -123,7 +112,7 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
       #Get the election winner from the message
       leader = msgheader[msgheader.find('l')+1:msgheader.find('/')]
       #Start letting all nodes know about the new leader
-      leaderMessage = "LEADER:i" + initiator + 'l' + leader + '/' + leaderRand
+      leaderMessage = "COORDINATION:i" + initiator + 'l' + leader + '/' + leaderRand
       mycontext['leader'] = leader
       send_message(mycontext['next_vessel_ip'], mycontext['next_vessel_port'], leaderMessage)
     else:
@@ -131,14 +120,13 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
       if mycontext['random'] > float(leaderRand):
         #Continue election with this as leader
         newMessage = msgheader[:msgheader.find('l')+1] + mycontext['processID'] + '/' + str(mycontext['random'])
-        print "NEW LEADER: " + newMessage
         send_message(mycontext['next_vessel_ip'], mycontext['next_vessel_port'], newMessage)
       else:
         #Continue election with previous leader
         send_message(mycontext['next_vessel_ip'], mycontext['next_vessel_port'], msgheader)
 
   #A leader has been selected
-  elif msgheader.startswith('LEADER'):
+  elif msgheader.startswith('COORDINATION'):
     #Get the initiator from the message
     initiator = msgheader[msgheader.find('i')+1:msgheader.find('l')]
     #If we are not the initiator
@@ -153,9 +141,9 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
     print "------- LEADER: " +  mycontext['leader'] + "This vessel: " + mycontext['processID']
 
   else:
-    # Shouldn't happen.
-    #raise Exception("Can't recognize messageheader")
-    print "------------------------ ERRORRRRRRR ----------\n\n\n " + msgheader + "\n"
+    # If socket is alive (not empty message), this shouldn't happen.
+    if msgheader != '': 
+      print "------------------------ ERRORRRRRRR ----------\n" + msgheader + "\n"
   
 
 # ------------------ INITIALIZE --------------------------------
@@ -179,11 +167,6 @@ if callfunc == 'initialize':
   #TODO Remove
   print mycontext['random']
 
-
-  #Generate random number
-  #mycontext['random'] = randomfloat() * 
-
-  
   # Running remotely: 
   if callargs[0] == 'remote':
     # Read and store ip-addresses of other vessels
