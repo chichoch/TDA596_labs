@@ -5,10 +5,12 @@ def insert_message(message):
     mycontext['index'] = index[:index.find('<p>')+3] + '<p>' + message + '</p>' \
       + index[index.find('<p>')+3:]
 
+# Inserts the leader and random float in the html file
 def insert_leader(leader, randomnr):
   index = mycontext['index']
   mycontext['index'] = index[:index.find('leader_div')+12] + '<h3>Leader: ' + leader  \
     + ' ' + str(randomnr) + '</h3>'+ index[index.find('leader_div')+12:]  
+
 # Sends a message to all vessels (except this)
 def send_to_vessels(message):
   for vessel in mycontext['vessels']:
