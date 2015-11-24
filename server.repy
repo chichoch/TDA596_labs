@@ -2,11 +2,13 @@
 def insert_message(message):
   if message != '':  
     index = mycontext['index']
-    mycontext['index'] = index[:index.find('<p>')+3] + '<p>' + message + '</p>' + index[index.find('<p>')+3:]
+    mycontext['index'] = index[:index.find('<p>')+3] + '<p>' + message + '</p>' \
+      + index[index.find('<p>')+3:]
 
 def insert_leader(leader, randomnr):
   index = mycontext['index']
-  mycontext['index'] = index[:index.find('leader_div')+12] + '<h3>Leader: ' + leader  + ' ' + str(randomnr) + '</h3>'+ index[index.find('leader_div')+12:]  
+  mycontext['index'] = index[:index.find('leader_div')+12] + '<h3>Leader: ' + leader  \
+    + ' ' + str(randomnr) + '</h3>'+ index[index.find('leader_div')+12:]  
 # Sends a message to all vessels (except this)
 def send_to_vessels(message):
   for vessel in mycontext['vessels']:
@@ -44,7 +46,8 @@ def remote_get_next_vessel():
 
 def start_election():
   #ELECTION:i127.0.0.1:12345l127.0.0.1:12345/0.1234353467
-  electionMessage = "ELECTION:i" + mycontext['processID'] + 'l' + mycontext['processID'] + '/' + str(mycontext['random'])
+  electionMessage = "ELECTION:i" + mycontext['processID'] + 'l' + mycontext['processID'] \
+    + '/' + str(mycontext['random'])
   send_message(mycontext['next_vessel_ip'], mycontext['next_vessel_port'], electionMessage)
 
 def send_ok(sockobj, thiscommhandle):
@@ -69,19 +72,19 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
   
   elif msgheader.startswith( 'POST' ):
     leader = mycontext['leader']
-    #TODO Maybe do this in the specific cases?
-    mycontext['lock'].acquire()
     if leader != mycontext['processID']:
       #Send the message to leader.
       send_message(leader[:leader.find(':')], leader[leader.find(':')+1:], msgheader)
-      #TODO Now we sleep for some time before loading page.............
       send_ok(sockobj, thiscommhandle)
 
     else:
       #Get the message from the post
       message = msgheader[msgheader.find("comment=")+8:]
       
-      #Insert the message to the html file
+      #TODO Explain this.
+      mycontext['lock'].acquire()
+
+      #Insert the message to the html file      
       insert_message(message)
       
       send_ok(sockobj, thiscommhandle)
@@ -91,7 +94,7 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
         send_to_vessels("OK" + message) 
       else:
         send_to_local_ports("OK" + message)
-    mycontext['lock'].release()
+      mycontext['lock'].release()
 
   #OK recieved from the leader
   elif msgheader.startswith('OK'):
