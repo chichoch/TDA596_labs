@@ -110,14 +110,12 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
     initiator = msgheader[msgheader.find('i')+1:msgheader.find('l')]
     leaderRand = msgheader[msgheader.find('/')+1:]
 
-    #If we are leader
+    #If we are initiator, we have found the leader, and the election is over.
     if initiator == mycontext['processID']:
       #Get the election winner from the message
       leader = msgheader[msgheader.find('l')+1:msgheader.find('/')]
-      #Start letting all nodes know about the new leader
-      leaderMessage = "COORDINATION:i" + initiator + 'l' + leader + '/' + leaderRand
       mycontext['leader'] = leader
-      send_message(mycontext['next_vessel_ip'], mycontext['next_vessel_port'], leaderMessage)
+      insert_leader(leader, msgheader[msgheader.find('/')+1:])
     else:
       #Compare our random to leader
       if mycontext['random'] > float(leaderRand):
@@ -127,21 +125,6 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
       else:
         #Continue election with previous leader
         send_message(mycontext['next_vessel_ip'], mycontext['next_vessel_port'], msgheader)
-
-  #A leader has been selected
-  elif msgheader.startswith('COORDINATION'):
-    #Get the initiator from the message
-    initiator = msgheader[msgheader.find('i')+1:msgheader.find('l')]
-    #If we are not the initiator
-    if initiator != mycontext['processID']:
-      #Store the ip:port of the elected leader
-      mycontext['leader'] = msgheader[msgheader.find('l') + 1:msgheader.find('/')]
-      #Continue sending the message to next vessel
-      send_message(mycontext['next_vessel_ip'], mycontext['next_vessel_port'], msgheader)
-    else:
-      insert_leader(mycontext['leader'], msgheader[msgheader.find('/')+1:])
-    #TODO REMOVE
-    print "------- LEADER: " +  mycontext['leader'] + "This vessel: " + mycontext['processID']
 
   else:
     # If socket is alive (not empty message), this shouldn't happen.
