@@ -45,6 +45,7 @@ def remote_get_next_vessel():
   mycontext['next_vessel_port'] = mycontext['port']
 
 def start_election():
+  #The message is as follows: 
   #ELECTION:i127.0.0.1:12345l127.0.0.1:12345/0.1234353467
   electionMessage = "ELECTION:i" + mycontext['processID'] + 'l' + mycontext['processID'] \
     + '/' + str(mycontext['random'])
@@ -59,7 +60,6 @@ def send_ok(sockobj, thiscommhandle):
   stopcomm(thiscommhandle)
 
 def board(ip, port, sockobj, thiscommhandle, listencommhandle):
-  mycontext['boardcounter'] += 1
   try:
     msgheader = sockobj.recv(1024) # Receive message, 
   except Exception, e:
@@ -81,55 +81,56 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
       #Get the message from the post
       message = msgheader[msgheader.find("comment=")+8:]
       
-      #TODO Explain this.
-      mycontext['lock'].acquire()
+      #Make sure that all messages are sent in sequential order.
+      mycontext['post_lock'].acquire()
 
-      #Insert the message to the html file      
+      # Insert the message to the html file      
       insert_message(message)
-      
       send_ok(sockobj, thiscommhandle)
-
-      #Send message to vessels or ports, depending on which connection is used.
+      
+      # Send message to vessels or ports, depending on which connection is used.
       if mycontext['connection'] == 'remote':
         send_to_vessels("OK" + message) 
       else:
-        send_to_local_ports("OK" + message)
-      mycontext['lock'].release()
+        send_to_local_ports("OK" + message)  
+      mycontext['post_lock'].release()
 
-  #OK recieved from the leader
+  # OK recieved from the leader
   elif msgheader.startswith('OK'):
-    #Pick out the message
+    # Pick out the message
     message = msgheader[msgheader.find('OK') + 2:]
-    #Insert the message to the html file
-    insert_message(message)
-    
+    # Make sure that we insert messages in sequential order. 
+    mycontext['ok_lock'].acquire()
+    # Insert the message to the html file
+    insert_message(message)    
+    mycontext['ok_lock'].release()
     send_ok(sockobj, thiscommhandle)
 
-  #On-going election
+  # On-going election
   elif msgheader.startswith('ELECTION'):
     initiator = msgheader[msgheader.find('i')+1:msgheader.find('l')]
     leaderRand = msgheader[msgheader.find('/')+1:]
 
-    #If we are initiator, we have found the leader, and the election is over.
+    # If we are initiator, we have found the leader, and the election is over.
     if initiator == mycontext['processID']:
-      #Get the election winner from the message
+      # Get the election winner from the message
       leader = msgheader[msgheader.find('l')+1:msgheader.find('/')]
       mycontext['leader'] = leader
       insert_leader(leader, msgheader[msgheader.find('/')+1:])
     else:
-      #Compare our random to leader
+      # Compare our random to leader
       if mycontext['random'] > float(leaderRand):
-        #Continue election with this as leader
+        # Continue election with this as leader
         newMessage = msgheader[:msgheader.find('l')+1] + mycontext['processID'] + '/' + str(mycontext['random'])
         send_message(mycontext['next_vessel_ip'], mycontext['next_vessel_port'], newMessage)
       else:
-        #Continue election with previous leader
+        # Continue election with previous leader
         send_message(mycontext['next_vessel_ip'], mycontext['next_vessel_port'], msgheader)
 
   else:
     # If socket is alive (not empty message), this shouldn't happen.
     if msgheader != '': 
-      print "------------------------ ERRORRRRRRR ----------\n" + msgheader + "\n"
+      print "---------- ERROR ----------\n" + msgheader + "\n"
   
 
 # ------------------ INITIALIZE --------------------------------
@@ -137,8 +138,6 @@ if callfunc == 'initialize':
   if len(callargs) != 2:
     raise Exception("Need two call arguments")
 
-  #TODO REMOVE
-  mycontext['boardcounter'] = 0
   # Read and store the html file
   mycontext['index'] = open('index.html', 'r').read()
   # Store which connection type used. (remote or local) 
@@ -146,13 +145,14 @@ if callfunc == 'initialize':
   # Store port used.
   port = int(callargs[1])
   mycontext['port'] = int(callargs[1])
-
   mycontext['random'] = randomfloat()
 
-  mycontext['lock'] = getlock()
-  #TODO Remove
-  print mycontext['random']
+  # Lock for post-messages
+  mycontext['post_lock'] = getlock()
 
+  # Lock for updating own html-file.
+  mycontext['ok_lock'] = getlock()
+  
   # Running remotely: 
   if callargs[0] == 'remote':
     # Read and store ip-addresses of other vessels
@@ -173,7 +173,6 @@ if callfunc == 'initialize':
     
     #Store process-id
     mycontext['processID'] = mycontext['ip'] + ':' + str(mycontext['port'])
-    
     local_get_next_vessel()
   
   else:
