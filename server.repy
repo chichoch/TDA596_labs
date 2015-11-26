@@ -74,11 +74,14 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
   
   elif msgheader.startswith( 'POST' ):
     leader = mycontext['leader']
+
+    # If we are not the leader.
     if leader != mycontext['processID']:
       #Send the message to leader.
       send_message(leader[:leader.find(':')], leader[leader.find(':')+1:], msgheader)
       send_ok(sockobj, thiscommhandle)
 
+    # If we are the leader.
     else:
       #Get the message from the post
       message = msgheader[msgheader.find("comment=")+8:]
@@ -176,7 +179,6 @@ if callfunc == 'initialize':
     #Store process-id
     mycontext['processID'] = mycontext['ip'] + ':' + str(mycontext['port'])
     local_get_next_vessel()
-  
   else:
     raise Exception("First argument needs to be 'remote' or 'local'")
 
