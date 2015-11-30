@@ -18,6 +18,8 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
     #Get the message from the post
     message = msgheader[msgheader.find("comment=")+8:]
     
+    # Set logical clock to max(local_clock, seqNr) + 1
+    mycontext['logical_clock'] = 
     test = Message(message, 1, ip + ":" + str(mycontext['port']))
     print test.toString()
     #Insert the message to the html file
@@ -55,8 +57,12 @@ if callfunc == 'initialize':
   # Store port used.
   port = int(callargs[1])
   mycontext['port'] = int(callargs[1])
+
+  # Local logical clock
   mycontext['logical_clock'] = 0
 
+  # Local list with messages
+  mycontext['local_message_list'] = []
   
   # Running remotely: 
   if callargs[0] == 'remote':
@@ -101,6 +107,12 @@ def send_message(ip, port, message):
     socket.close()
   except Exception, e:
     print '-------SOCKET ERROR------\n' + str(e)
+
+def message_from_string(string):
+  content = string[string.find("MESSAGE:") + 8 : string.find("Seq:")]
+  seqNr = string[string.find("Seq:") + 4 : string.find("Sender:")]
+  sender = string[string.find("Sender:") + 7:]
+  return Message(content, seqNr, sender)
 
 class Message:
   def __init__(self, content, seqNr, sender):
