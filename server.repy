@@ -42,6 +42,7 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
      
   else:
     # Recieved a message.
+    message = message_from_string(msgheader)
     # Create a Message-object, set logical_clock to max(recv.seqNr,logical_clock) + 1.
     # Put the message in the right place of "local_message_list"
     # create html from the list.
