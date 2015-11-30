@@ -1,15 +1,79 @@
+def board(ip, port, sockobj, thiscommhandle, listencommhandle):
+  try:
+    msgheader = sockobj.recv(1024) # Receive message, 
+  except Exception, e:
+    print '------RECIEVE ERROR-------\n' + str(e)
+    msgheader = ''
+
+  # React depending on message type: HTTP GET or POST, or some other type of communication.
+  if msgheader.startswith( 'GET' ):
+    # Get the stored html file
+    htmlresponse = mycontext['index']
+    # Send the html file to the socket
+    sockobj.send("HTTP/1.1 200 OK\r\nContent-type: text/html\r\n" + \
+    "Content-length: %i\r\n\r\n%s" % (len(htmlresponse), htmlresponse))
+    stopcomm(thiscommhandle)   
+  
+  elif msgheader.startswith( 'POST' ):
+    #Get the message from the post
+    message = msgheader[msgheader.find("comment=")+8:]
+    
+    #Insert the message to the html file
+    insert_message(message)
+    
+    #Get the stored html file
+    response = mycontext['index']
+    
+    #Send the complete file to the socket.
+    sockobj.send("HTTP/1.1 200 OK\r\nContent-type: text/html\r\n" + \
+    "Content-length: %i\r\n\r\n%s" % (len(response), response))
+    stopcomm(thiscommhandle)
+
+    #Send message to vessels or ports, depending on which connection is used.
+    if mycontext['connection'] == 'remote':
+      send_to_vessels(message) 
+    else:
+      send_to_local_ports(message)
+     
+  else:
+    # Insert the message to the html. 
+    insert_message(msgheader)
+  
+if callfunc == 'initialize':
+  if len(callargs) != 2:
+    raise Exception("Need two call arguments")
+
+  # Read and store the html file
+  mycontext['index'] = open('index.html', 'r').read()
+  # Store which connection type used. (remote or local) 
+  mycontext['connection'] = callargs[0]
+  # Store port used.
+  port = int(callargs[1])
+  mycontext['port'] = int(callargs[1])
+
+  
+  # Running remotely: 
+  if callargs[0] == 'remote':
+    # Read and store ip-addresses of other vessels
+    mycontext['vessels'] = open('ipaddresses.txt','r').read().split()  
+    ip = getmyip()
+
+  # Running locally.
+  elif callargs[0] == 'local':
+    # Read and store the ports for running instances on localhost.
+    mycontext['localports'] = open('localports.txt', 'r').read().split()
+    ip = '127.0.0.1'
+
+  else:
+    raise Exception("First argument needs to be 'remote' or 'local'")
+    
+  # Whenever this vessel gets a connection on its IPaddress:port it'll call function board
+  listencommhandle = waitforconn(ip,port,board)
+
 # Inserts a new message into the stored html file  
 def insert_message(message):
-  if message != '':  
-    index = mycontext['index']
-    mycontext['index'] = index[:index.find('<p>')+3] + '<p>' + message + '</p>' \
-      + index[index.find('<p>')+3:]
-
-# Inserts the leader and random float in the html file
-def insert_leader(leader, randomnr):
   index = mycontext['index']
-  mycontext['index'] = index[:index.find('leader_div')+12] + '<h3>Leader: ' + leader  \
-    + ' ' + str(randomnr) + '</h3>'+ index[index.find('leader_div')+12:]  
+  mycontext['index'] = index[:index.find('<p>')+3] + '<p>' + message + '</p>' + index[index.find('<p>')+3:]
 
 # Sends a message to all vessels (except this)
 def send_to_vessels(message):
@@ -26,164 +90,8 @@ def send_to_local_ports(message):
 # Sends a message to specific ip:port
 def send_message(ip, port, message):
   try:
-    socket = openconn(ip, int(port))
+    socket = openconn(ip, port)
     socket.send(message)
     socket.close()
   except Exception, e:
-    if str(e).find("Connection refused") != -1:
-      start_election()
     print '-------SOCKET ERROR------\n' + str(e)
-
-#Sets this vessels neighbour in the ring (for local)
-def local_get_next_vessel():
-  next_vessel_pos = (mycontext['localports'].index(str(mycontext['port'])) + 1) % (len(mycontext['localports']))
-  mycontext['next_vessel_ip'] = mycontext['ip']
-  mycontext['next_vessel_port'] = mycontext['localports'][next_vessel_pos]
-
-#Sets this vessels neighbour in the ring (for remote)
-def remote_get_next_vessel():
-  next_vessel_pos = (mycontext['vessels'].index(mycontext['ip']) + 1) % (len(mycontext['vessels']))
-  mycontext['next_vessel_ip'] = mycontext['vessels'][next_vessel_pos]
-  mycontext['next_vessel_port'] = mycontext['port']
-
-def start_election():
-  #The message is as follows: 
-  #ELECTION:i127.0.0.1:12345l127.0.0.1:12345/0.1234353467
-  electionMessage = "ELECTION:i" + mycontext['processID'] + 'l' + mycontext['processID'] \
-    + '/' + str(mycontext['random'])
-  send_message(mycontext['next_vessel_ip'], mycontext['next_vessel_port'], electionMessage)
-
-def send_ok(sockobj, thiscommhandle):
-  # Get the stored html file
-  htmlresponse = mycontext['index']
-  # Send the html file to the socket
-  sockobj.send("HTTP/1.1 200 OK\r\nContent-type: text/html\r\n" + \
-  "Content-length: %i\r\n\r\n%s" % (len(htmlresponse), htmlresponse))
-  stopcomm(thiscommhandle)
-
-def board(ip, port, sockobj, thiscommhandle, listencommhandle):
-  try:
-    msgheader = sockobj.recv(1024) # Receive message, 
-  except Exception, e:
-    print '------RECIEVE ERROR-------\n' + str(e)
-    msgheader = ''
-
-  # React depending on message type: HTTP GET or POST, or some other type of communication.
-  if msgheader.startswith( 'GET' ):
-    send_ok(sockobj, thiscommhandle)   
-  
-  elif msgheader.startswith( 'POST' ):
-    leader = mycontext['leader']
-
-    # If we are not the leader.
-    if leader != mycontext['processID']:
-      #Send the message to leader.
-      send_message(leader[:leader.find(':')], leader[leader.find(':')+1:], msgheader)
-      send_ok(sockobj, thiscommhandle)
-
-    # If we are the leader.
-    else:
-      #Get the message from the post
-      message = msgheader[msgheader.find("comment=")+8:]
-      
-      #Make sure that all messages are sent in sequential order.
-      mycontext['post_lock'].acquire()
-
-      # Insert the message to the html file      
-      insert_message(message)
-      send_ok(sockobj, thiscommhandle)
-      
-      # Send message to vessels or ports, depending on which connection is used.
-      if mycontext['connection'] == 'remote':
-        send_to_vessels("OK" + message) 
-      else:
-        send_to_local_ports("OK" + message)  
-      mycontext['post_lock'].release()
-
-  # OK recieved from the leader
-  elif msgheader.startswith('OK'):
-    # Pick out the message
-    message = msgheader[msgheader.find('OK') + 2:]
-    # Make sure that we insert messages in sequential order. 
-    mycontext['ok_lock'].acquire()
-    # Insert the message to the html file
-    insert_message(message)    
-    mycontext['ok_lock'].release()
-    send_ok(sockobj, thiscommhandle)
-
-  # On-going election
-  elif msgheader.startswith('ELECTION'):
-    initiator = msgheader[msgheader.find('i')+1:msgheader.find('l')]
-    leaderRand = msgheader[msgheader.find('/')+1:]
-
-    # If we are initiator, we have found the leader, and the election is over.
-    if initiator == mycontext['processID']:
-      # Get the election winner from the message
-      leader = msgheader[msgheader.find('l')+1:msgheader.find('/')]
-      mycontext['leader'] = leader
-      insert_leader(leader, msgheader[msgheader.find('/')+1:])
-    else:
-      # Compare our random to leader
-      if mycontext['random'] > float(leaderRand):
-        # Continue election with this as leader
-        newMessage = msgheader[:msgheader.find('l')+1] + mycontext['processID'] + '/' + str(mycontext['random'])
-        send_message(mycontext['next_vessel_ip'], mycontext['next_vessel_port'], newMessage)
-      else:
-        # Continue election with previous leader
-        send_message(mycontext['next_vessel_ip'], mycontext['next_vessel_port'], msgheader)
-
-  else:
-    # If socket is alive (not empty message), this shouldn't happen.
-    if msgheader != '': 
-      print "---------- ERROR ----------\n" + msgheader + "\n"
-  
-
-# ------------------ INITIALIZE --------------------------------
-if callfunc == 'initialize':
-  if len(callargs) != 2:
-    raise Exception("Need two call arguments")
-
-  # Read and store the html file
-  mycontext['index'] = open('index.html', 'r').read()
-  # Store which connection type used. (remote or local) 
-  mycontext['connection'] = callargs[0]
-  # Store port used.
-  port = int(callargs[1])
-  mycontext['port'] = int(callargs[1])
-  mycontext['random'] = randomfloat()
-
-  # Lock for post-messages
-  mycontext['post_lock'] = getlock()
-
-  # Lock for updating own html-file.
-  mycontext['ok_lock'] = getlock()
-  
-  # Running remotely: 
-  if callargs[0] == 'remote':
-    # Read and store ip-addresses of other vessels
-    mycontext['vessels'] = open('ipaddresses.txt','r').read().split()  
-    ip = getmyip()
-    mycontext['ip'] = getmyip()
-
-    #Store process-id
-    mycontext['processID'] = mycontext['ip'] + ':' + str(mycontext['port'])
-    remote_get_next_vessel()
-
-  # Running locally.
-  elif callargs[0] == 'local':
-    # Read and store the ports for running instances on localhost.
-    mycontext['localports'] = open('localports.txt', 'r').read().split()
-    ip = '127.0.0.1'
-    mycontext['ip'] = '127.0.0.1'
-    
-    #Store process-id
-    mycontext['processID'] = mycontext['ip'] + ':' + str(mycontext['port'])
-    local_get_next_vessel()
-  else:
-    raise Exception("First argument needs to be 'remote' or 'local'")
-
-  #Start selection, but first wait 1 sec to let all intances be initiated.
-  settimer(1, start_election, [])
-
-  # Whenever this vessel gets a connection on its IPaddress:port it'll call function board
-  listencommhandle = waitforconn(ip,port,board)
