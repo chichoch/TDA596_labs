@@ -19,7 +19,8 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
     message = msgheader[msgheader.find("comment=")+8:]
     
     # Set logical clock to max(local_clock, seqNr) + 1
-    mycontext['logical_clock'] = 
+    # mycontext['logical_clock'] = 
+    
     test = Message(message, 1, ip + ":" + str(mycontext['port']))
     print test.toString()
     #Insert the message to the html file
