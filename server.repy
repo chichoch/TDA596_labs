@@ -1,3 +1,28 @@
+class Message:
+  def __init__(self, content, seqNr, sender):
+    self.content = content
+    self.seqNr = seqNr
+    self.sender = sender
+
+  def toString(self):
+    return "MESSAGE:" + self.content + "Seq:" + str(self.seqNr) + "Sender:" + self.sender
+
+def sort_messages():
+  items = mycontext['local_message_list']
+
+  #Insertion-sort:
+  for i in range(1, len(items)):
+    j = i
+    while j > 0 and items[j].sender < items[j-1].sender:
+      items[j], items[j-1] = items[j-1], items[j]
+      j -= 1
+
+  for i in range(1, len(items)):
+    j = i
+    while j > 0 and items[j].seqNr < items[j-1].seqNr:
+      items[j], items[j-1] = items[j-1], items[j]
+      j -= 1
+
 def board(ip, port, sockobj, thiscommhandle, listencommhandle):
   try:
     msgheader = sockobj.recv(1024) # Receive message, 
@@ -21,7 +46,7 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
     # Set logical clock to max(local_clock, seqNr) + 1
     mycontext['logical_clock'] += 1
     
-    message = Message(comment, mycontext['logical_clock'], ip + ":" + str(mycontext['port']))
+    message = Message(comment, mycontext['logical_clock'], mycontext['ip'] + ":" + str(mycontext['port']))
     print message.toString()
 
     #Insert the message to the html file
@@ -45,13 +70,13 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
   else:
     # Recieved a message.
     # Create Message-object from String:
-    message = message_from_string(msgheader)
-
-    # Set logical_clock to max(recv.seqNr,logical_clock)
-    mycontext['logical_clock'] = max(message.seqNr, mycontext['logical_clock'])
-    # Put the message in the right place of "local_message_list"
-    insert_message(message)
-    # create html from the list.
+    if (msgheader != ''):
+      message = message_from_string(msgheader)
+      # Set logical_clock to max(recv.seqNr,logical_clock)
+      mycontext['logical_clock'] = max(message.seqNr, mycontext['logical_clock'])
+      # Put the message in the right place of "local_message_list"
+      insert_message(message)
+      # create html from the list.
 
   
 if callfunc == 'initialize':
@@ -60,23 +85,26 @@ if callfunc == 'initialize':
 
   # Read and store the html file
   mycontext['index'] = open('index.html', 'r').read()
+  mycontext['empty_html'] = mycontext['index']
   # Store which connection type used. (remote or local) 
   mycontext['connection'] = callargs[0]
   # Store port used.
   port = int(callargs[1])
   mycontext['port'] = int(callargs[1])
+  mycontext['ip'] = '127.0.0.1'
 
   # Local logical clock
   mycontext['logical_clock'] = 0
 
   # Local list with messages
   mycontext['local_message_list'] = []
-  
+
   # Running remotely: 
   if callargs[0] == 'remote':
     # Read and store ip-addresses of other vessels
     mycontext['vessels'] = open('ipaddresses.txt','r').read().split()  
     ip = getmyip()
+    mycontext['ip'] = ip
 
   # Running locally.
   elif callargs[0] == 'local':
@@ -94,18 +122,14 @@ if callfunc == 'initialize':
 def insert_message(message):
   # Adds the message to the list.
   mycontext['local_message_list'].append(message)
+  print mycontext['local_message_list']
   # Sort the list first on seqNr and then IP-address.
+  sort_messages()
 
-  index = mycontext['index']
-  mycontext['index'] = index[:index.find('<p>')+3] + '<p>' + message + '</p>' + index[index.find('<p>')+3:]
-
-def sort_list():
-  mList = mycontext['local_message_list']
-  sorted(mList, key=lambda message: message.seqNr)
-  # TODO Just for testing.
-  for message in mList:
-      print message.toString
-  #TODO Sort on IP also!
+  mycontext['index'] = mycontext['empty_html']
+  for message in mycontext['local_message_list']:
+    mycontext['index'] = mycontext['index'][:mycontext['index'].find('<p>')+3] + '<p>' + \
+          message.content + '</p>' + mycontext['index'][mycontext['index'].find('<p>')+3:]
 
 # Sends a message to all vessels (except this)
 def send_to_vessels(message):
@@ -130,15 +154,6 @@ def send_message(ip, port, message):
 
 def message_from_string(string):
   content = string[string.find("MESSAGE:") + 8 : string.find("Seq:")]
-  seqNr = string[string.find("Seq:") + 4 : string.find("Sender:")]
+  seqNr = int(string[string.find("Seq:") + 4 : string.find("Sender:")])
   sender = string[string.find("Sender:") + 7:]
   return Message(content, seqNr, sender)
-
-class Message:
-  def __init__(self, content, seqNr, sender):
-    self.content = content
-    self.seqNr = seqNr
-    self.sender = sender
-
-  def toString(self):
-    return "MESSAGE:" + self.content + "Seq:" + str(self.seqNr) + "Sender:" + self.sender
