@@ -43,6 +43,11 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
     mycontext['message_counter'] += 1
     if(mycontext['message_counter'] == 1):
       mycontext['start_time'] = getruntime()
+      print "STARTTIME: " + str(getruntime())
+
+    if(mycontext['message_counter'] == 3):
+      mycontext['end_time'] = getruntime()
+     
     
     #Get the comment from the post
     comment = msgheader[msgheader.find("comment=")+8:]
@@ -54,7 +59,6 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
     mycontext['clock_lock'].release()
     
     message = Message(comment, mycontext['logical_clock'], mycontext['ip'] + ":" + str(mycontext['port']))
-    print message.toString()
 
     #Insert the message to the html file
     # TODO This need to create the html-file from the list instead.
@@ -74,17 +78,20 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
     else:
       send_to_local_ports(message.toString())
 
-    if(mycontext['message_counter'] == 3):
-      mycontext['end_time'] = getruntime()
-      insert_time()
-     
+ 
   else:
     # Recieved a message.
     # Create Message-object from String:
     if (msgheader != ''):
       mycontext['message_counter'] += 1
+      print "MESSAGE: " + str(mycontext['message_counter'])
       if(mycontext['message_counter'] == 1):
         mycontext['start_time'] = getruntime()
+
+      if(mycontext['message_counter'] == 3):
+        mycontext['end_time'] = getruntime()
+        print "ENDTIME: " + str(mycontext['end_time'])
+        print "\n Elapsed time: " + str(mycontext['end_time'] - mycontext['start_time'])
       
 
       message = message_from_string(msgheader)
@@ -99,9 +106,7 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
       insert_message(message)
       # create html from the list.
 
-      if(mycontext['message_counter'] == 3):
-        mycontext['end_time'] = getruntime()
-        insert_time()
+    
 
   
 if callfunc == 'initialize':
@@ -154,7 +159,6 @@ def insert_message(message):
   mycontext['insert_lock'].acquire()
   # Adds the message to the list.
   mycontext['local_message_list'].append(message)
-  print mycontext['local_message_list']
   # Sort the list first on seqNr and then IP-address.
   sort_messages()
 
