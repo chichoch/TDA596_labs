@@ -10,13 +10,13 @@ class Message:
 def sort_messages():
   items = mycontext['local_message_list']
 
-  #Insertion-sort:
+  #Insertion-sort by sender:
   for i in range(1, len(items)):
     j = i
     while j > 0 and items[j].sender < items[j-1].sender:
       items[j], items[j-1] = items[j-1], items[j]
       j -= 1
-
+  #Insertion-sort by seqNr:
   for i in range(1, len(items)):
     j = i
     while j > 0 and items[j].seqNr < items[j-1].seqNr:
@@ -43,8 +43,11 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
     #Get the comment from the post
     comment = msgheader[msgheader.find("comment=")+8:]
     
-    # Set logical clock to max(local_clock, seqNr) + 1
+    #It is important to have mutex access to the clock
+    mycontext['clock_lock'].acquire()
+    #We have made a new commment, meaning we have to increase the clock.
     mycontext['logical_clock'] += 1
+    mycontext['clock_lock'].release()
     
     message = Message(comment, mycontext['logical_clock'], mycontext['ip'] + ":" + str(mycontext['port']))
     print message.toString()
@@ -72,8 +75,13 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
     # Create Message-object from String:
     if (msgheader != ''):
       message = message_from_string(msgheader)
+
+      #It is important to have mutex access to the clock
+      mycontext['clock_lock'].acquire()
       # Set logical_clock to max(recv.seqNr,logical_clock)
       mycontext['logical_clock'] = max(message.seqNr, mycontext['logical_clock'])
+      mycontext['clock_lock'].release()
+
       # Put the message in the right place of "local_message_list"
       insert_message(message)
       # create html from the list.
@@ -99,6 +107,9 @@ if callfunc == 'initialize':
   # Local list with messages
   mycontext['local_message_list'] = []
 
+  mycontext['clock_lock'] = getlock()
+  mycontext['insert_lock'] = getlock()
+
   # Running remotely: 
   if callargs[0] == 'remote':
     # Read and store ip-addresses of other vessels
@@ -120,6 +131,8 @@ if callfunc == 'initialize':
 
 # Inserts a new message into the message list, sorts the list and created the html.  
 def insert_message(message):
+
+  mycontext['insert_lock'].acquire()
   # Adds the message to the list.
   mycontext['local_message_list'].append(message)
   print mycontext['local_message_list']
@@ -130,6 +143,7 @@ def insert_message(message):
   for message in mycontext['local_message_list']:
     mycontext['index'] = mycontext['index'][:mycontext['index'].find('<p>')+3] + '<p>' + \
           message.content + '</p>' + mycontext['index'][mycontext['index'].find('<p>')+3:]
+  mycontext['insert_lock'].release()
 
 # Sends a message to all vessels (except this)
 def send_to_vessels(message):
