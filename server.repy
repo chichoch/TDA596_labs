@@ -40,6 +40,11 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
     stopcomm(thiscommhandle)   
   
   elif msgheader.startswith( 'POST' ):
+    mycontext['message_counter'] += 1
+    if(mycontext['message_counter'] == 1):
+      mycontext['start_time'] = getruntime()
+    if(mycontext['message_counter'] == 3):
+      mycontext['end_time'] = getruntime()
     #Get the comment from the post
     comment = msgheader[msgheader.find("comment=")+8:]
     
@@ -74,6 +79,13 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
     # Recieved a message.
     # Create Message-object from String:
     if (msgheader != ''):
+      mycontext['message_counter'] += 1
+      if(mycontext['message_counter'] == 1):
+        mycontext['start_time'] = getruntime()
+      if(mycontext['message_counter'] == 3):
+        mycontext['end_time'] = getruntime()
+        insert_time()
+
       message = message_from_string(msgheader)
 
       #It is important to have mutex access to the clock
@@ -109,6 +121,8 @@ if callfunc == 'initialize':
 
   mycontext['clock_lock'] = getlock()
   mycontext['insert_lock'] = getlock()
+
+  mycontext['message_counter'] = 0
 
   # Running remotely: 
   if callargs[0] == 'remote':
@@ -171,3 +185,9 @@ def message_from_string(string):
   seqNr = int(string[string.find("Seq:") + 4 : string.find("Sender:")])
   sender = string[string.find("Sender:") + 7:]
   return Message(content, seqNr, sender)
+
+def insert_time():
+  time = mycontext['end_time'] - mycontext['start_time']
+  index = mycontext['index']
+  mycontext['index'] = index[:index.find('timer_div')+9] + '<h3>Time: ' + str(time) \
+           +'</h3>'+ index[index.find('timer_div')+9:]
