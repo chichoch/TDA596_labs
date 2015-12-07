@@ -23,6 +23,53 @@ def sort_messages():
       items[j], items[j-1] = items[j-1], items[j]
       j -= 1
 
+# Inserts a new message into the message list, sorts the list and created the html.  
+def insert_message(message):
+  mycontext['insert_lock'].acquire()
+  # Adds the message to the list.
+  mycontext['local_message_list'].append(message)
+  # Sort the list first on seqNr and then IP-address.
+  sort_messages()
+
+  mycontext['index'] = mycontext['empty_html']
+  for message in mycontext['local_message_list']:
+    mycontext['index'] = mycontext['index'][:mycontext['index'].find('<p>')+3] + '<p>' + \
+          message.content + '</p>' + mycontext['index'][mycontext['index'].find('<p>')+3:]
+  mycontext['insert_lock'].release()
+
+# Sends a message to all vessels (except this)
+def send_to_vessels(message):
+  for vessel in mycontext['vessels']:
+      if (vessel != getmyip()):
+        send_message(vessel, mycontext['port'], message)
+        
+# Sends a message to all ports (except this)
+def send_to_local_ports(message):
+  for portnr in mycontext['localports']:
+    if(int(portnr) != mycontext['port']):
+      send_message('127.0.0.1', int(portnr), message)
+
+# Sends a message to specific ip:port
+def send_message(ip, port, message):
+  try:
+    socket = openconn(ip, port)
+    socket.send(message)
+    socket.close()
+  except Exception, e:
+    print '-------SOCKET ERROR------\n' + str(e)
+
+def message_from_string(string):
+  content = string[string.find("MESSAGE:") + 8 : string.find("Seq:")]
+  seqNr = int(string[string.find("Seq:") + 4 : string.find("Sender:")])
+  sender = string[string.find("Sender:") + 7:]
+  return Message(content, seqNr, sender)
+
+def insert_time():
+  time = mycontext['end_time'] - mycontext['start_time']
+  index = mycontext['index']
+  mycontext['index'] = index[:index.find('timer_div')+9] + '<h3>Time: ' + str(time) \
+           +'</h3>'+ index[index.find('timer_div')+9:]
+
 def board(ip, port, sockobj, thiscommhandle, listencommhandle):
   try:
     msgheader = sockobj.recv(1024) # Receive message, 
@@ -40,15 +87,6 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
     stopcomm(thiscommhandle)   
   
   elif msgheader.startswith( 'POST' ):
-    mycontext['message_counter'] += 1
-    if(mycontext['message_counter'] == 1):
-      mycontext['start_time'] = getruntime()
-      print "STARTTIME: " + str(getruntime())
-
-    if(mycontext['message_counter'] == 3):
-      mycontext['end_time'] = getruntime()
-     
-    
     #Get the comment from the post
     comment = msgheader[msgheader.find("comment=")+8:]
     
@@ -56,12 +94,11 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
     mycontext['clock_lock'].acquire()
     #We have made a new commment, meaning we have to increase the clock.
     mycontext['logical_clock'] += 1
-    mycontext['clock_lock'].release()
     
     message = Message(comment, mycontext['logical_clock'], mycontext['ip'] + ":" + str(mycontext['port']))
+    mycontext['clock_lock'].release()
 
     #Insert the message to the html file
-    # TODO This need to create the html-file from the list instead.
     insert_message(message)
     
     #Get the stored html file
@@ -83,17 +120,6 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
     # Recieved a message.
     # Create Message-object from String:
     if (msgheader != ''):
-      mycontext['message_counter'] += 1
-      print "MESSAGE: " + str(mycontext['message_counter'])
-      if(mycontext['message_counter'] == 1):
-        mycontext['start_time'] = getruntime()
-
-      if(mycontext['message_counter'] == 3):
-        mycontext['end_time'] = getruntime()
-        print "ENDTIME: " + str(mycontext['end_time'])
-        print "\n Elapsed time: " + str(mycontext['end_time'] - mycontext['start_time'])
-      
-
       message = message_from_string(msgheader)
 
       #It is important to have mutex access to the clock
@@ -105,9 +131,6 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
       # Put the message in the right place of "local_message_list"
       insert_message(message)
       # create html from the list.
-
-    
-
   
 if callfunc == 'initialize':
   if len(callargs) != 2:
@@ -153,50 +176,3 @@ if callfunc == 'initialize':
   # Whenever this vessel gets a connection on its IPaddress:port it'll call function board
   listencommhandle = waitforconn(ip,port,board)
 
-# Inserts a new message into the message list, sorts the list and created the html.  
-def insert_message(message):
-
-  mycontext['insert_lock'].acquire()
-  # Adds the message to the list.
-  mycontext['local_message_list'].append(message)
-  # Sort the list first on seqNr and then IP-address.
-  sort_messages()
-
-  mycontext['index'] = mycontext['empty_html']
-  for message in mycontext['local_message_list']:
-    mycontext['index'] = mycontext['index'][:mycontext['index'].find('<p>')+3] + '<p>' + \
-          message.content + '</p>' + mycontext['index'][mycontext['index'].find('<p>')+3:]
-  mycontext['insert_lock'].release()
-
-# Sends a message to all vessels (except this)
-def send_to_vessels(message):
-  for vessel in mycontext['vessels']:
-      if (vessel != getmyip()):
-        send_message(vessel, mycontext['port'], message)
-        
-# Sends a message to all ports (except this)
-def send_to_local_ports(message):
-  for portnr in mycontext['localports']:
-    if(int(portnr) != mycontext['port']):
-      send_message('127.0.0.1', int(portnr), message)
-
-# Sends a message to specific ip:port
-def send_message(ip, port, message):
-  try:
-    socket = openconn(ip, port)
-    socket.send(message)
-    socket.close()
-  except Exception, e:
-    print '-------SOCKET ERROR------\n' + str(e)
-
-def message_from_string(string):
-  content = string[string.find("MESSAGE:") + 8 : string.find("Seq:")]
-  seqNr = int(string[string.find("Seq:") + 4 : string.find("Sender:")])
-  sender = string[string.find("Sender:") + 7:]
-  return Message(content, seqNr, sender)
-
-def insert_time():
-  time = mycontext['end_time'] - mycontext['start_time']
-  index = mycontext['index']
-  mycontext['index'] = index[:index.find('timer_div')+9] + '<h3>Time: ' + str(time) \
-           +'</h3>'+ index[index.find('timer_div')+9:]
