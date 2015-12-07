@@ -115,6 +115,8 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
     else:
       send_to_local_ports(message.toString())
 
+
+
  
   else:
     # Recieved a message.
