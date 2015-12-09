@@ -1,3 +1,4 @@
+# Represents a blackboard-message.
 class Message:
   def __init__(self, content, seqNr, sender):
     self.content = content
@@ -7,6 +8,7 @@ class Message:
   def toString(self):
     return "MESSAGE:" + self.content + "Seq:" + str(self.seqNr) + "Sender:" + self.sender
 
+# Sort the message list first by sender and then by seq nr to assure same order on all vessels.
 def sort_messages():
   items = mycontext['local_message_list']
 
@@ -25,17 +27,19 @@ def sort_messages():
 
 # Inserts a new message into the message list, sorts the list and created the html.  
 def insert_message(message):
-  mycontext['insert_lock'].acquire()
+  # Locks are used to assure mutual exclusion of the list. 
+  mycontext['list_lock'].acquire()
   # Adds the message to the list.
   mycontext['local_message_list'].append(message)
   # Sort the list first on seqNr and then IP-address.
   sort_messages()
 
+  # Update the index.html-file
   mycontext['index'] = mycontext['empty_html']
   for message in mycontext['local_message_list']:
     mycontext['index'] = mycontext['index'][:mycontext['index'].find('<p>')+3] + '<p>' + \
           message.content + '</p>' + mycontext['index'][mycontext['index'].find('<p>')+3:]
-  mycontext['insert_lock'].release()
+  mycontext['list_lock'].release()
 
 # Sends a message to all vessels (except this)
 def send_to_vessels(message):
@@ -64,12 +68,6 @@ def message_from_string(string):
   sender = string[string.find("Sender:") + 7:]
   return Message(content, seqNr, sender)
 
-def insert_time():
-  time = mycontext['end_time'] - mycontext['start_time']
-  index = mycontext['index']
-  mycontext['index'] = index[:index.find('timer_div')+9] + '<h3>Time: ' + str(time) \
-           +'</h3>'+ index[index.find('timer_div')+9:]
-
 def board(ip, port, sockobj, thiscommhandle, listencommhandle):
   try:
     msgheader = sockobj.recv(1024) # Receive message, 
@@ -92,9 +90,9 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
     
     #It is important to have mutex access to the clock
     mycontext['clock_lock'].acquire()
-    #We have made a new commment, meaning we have to increase the clock.
+    #We have made a new comment, meaning we have to increase the clock.
     mycontext['logical_clock'] += 1
-    
+    #Create a message-object.
     message = Message(comment, mycontext['logical_clock'], mycontext['ip'] + ":" + str(mycontext['port']))
     mycontext['clock_lock'].release()
 
@@ -120,8 +118,9 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
  
   else:
     # Recieved a message.
-    # Create Message-object from String:
+    # Ignore empty messages. (Can be caused by socket-errors etc.)
     if (msgheader != ''):
+      # Create Message-object from String:
       message = message_from_string(msgheader)
 
       #It is important to have mutex access to the clock
@@ -130,9 +129,8 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
       mycontext['logical_clock'] = max(message.seqNr, mycontext['logical_clock'])
       mycontext['clock_lock'].release()
 
-      # Put the message in the right place of "local_message_list"
+      # Insert the message in the list, sort it and update html-file.
       insert_message(message)
-      # create html from the list.
   
 if callfunc == 'initialize':
   if len(callargs) != 2:
@@ -155,7 +153,7 @@ if callfunc == 'initialize':
   mycontext['local_message_list'] = []
 
   mycontext['clock_lock'] = getlock()
-  mycontext['insert_lock'] = getlock()
+  mycontext['list_lock'] = getlock()
 
   mycontext['message_counter'] = 0
 
@@ -177,4 +175,3 @@ if callfunc == 'initialize':
     
   # Whenever this vessel gets a connection on its IPaddress:port it'll call function board
   listencommhandle = waitforconn(ip,port,board)
-
