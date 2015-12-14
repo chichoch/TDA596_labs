@@ -26,14 +26,15 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
     if msgheader.startswith( 'GET' ):
       print "Received GET"
       handle_request_get(msgheader, sockobj, thiscommhandle)
+    # TODO Maybe "fulkod"? 4 cases, but 2 of them do the same thing.  
     elif msgheader.startswith( 'POST /Add' ):
       handle_request_add(msgheader, sockobj, thiscommhandle)
     elif msgheader.startswith( 'POST /Change' ):
       handle_request_change(msgheader, sockobj, thiscommhandle)
-    elif msg.startswith( 'SENTDELETE' ):
-      handle_request_from_vessel_delete(msgheader, sockobj, thiscommhandle)
-    elif msg.startswith( 'SENTADD' ):
-      handle_request_from_vessel_add(msgheader, sockobj, thiscommhandle)
+    elif msgheader.startswith( 'SENTDEL' ):
+      handle_request_change(msgheader, sockobj, thiscommhandle)
+    elif msgheader.startswith( 'SENTADD' ):
+      handle_request_add_from_vessel(msgheader, sockobj, thiscommhandle)
   except Exception, e:
     print "Exception in board: %s, %s\n" %(type(e), e)
     raise
@@ -45,11 +46,23 @@ def handle_request_get(msgheader, sockobj, thiscommhandle):
   sockobj.send(make_http_ok_response(htmlresponse))
   stopcomm(thiscommhandle)  
 
-def handle_request_from_vessel_delete(msgheader, sockobj, thiscommhandle):
+def handle_request_add_from_vessel(msgheader, sockobj, thiscommhandle):
+ # TODO What to do with logical clock?! Max(local) etc?!?!??!?!?!
+  mycontext['ts'] = mycontext['ts'] + 1
   
+  comment = str(msgheader[msgheader.find("comment=") + 8:msgheader.find("&src_ts=")])
+  ref_ts = int(msgheader[msgheader.find("&src_ts=") + 8:msgheader.find("&src_ip=")])
+  ref_ip = msgheader[msgheader.find("&src_ip=") + 8:msgheader.find("&src_port=")]
+  ref_port = int(msgheader[msgheader.find("&src_port=") + 10:msgheader.find("&action=")])
 
-def handle_request_from_vessel_add(msgheader, sockobj, thiscommhandle):
-
+  entry = "comment=%s&src_ts=%u&src_ip=%s&src_port=%u&action=%s" % \
+      (comment, ref_ts, ref_ip, ref_port, 'Add')
+  
+  # Add to local store
+  mycontext['entrieslist'].append(entry)
+  
+  # Send the page
+  handle_request_get(msgheader, sockobj, thiscommhandle)
 
 # ------------------------------------------------------------------------------
 # Handles POST \Add request from browser
@@ -57,6 +70,9 @@ def handle_request_from_vessel_add(msgheader, sockobj, thiscommhandle):
 def handle_request_add(msgheader, sockobj, thiscommhandle):
   print "Received Add"
   
+  isFromVessel = msgheader.startswith( 'SENT' )
+  print isFromVessel
+
   #increment logical clock
   mycontext['ts'] = mycontext['ts'] + 1
   
@@ -72,25 +88,32 @@ def handle_request_add(msgheader, sockobj, thiscommhandle):
   
   # Add to local store
   mycontext['entrieslist'].append(entry)
-
-  #send_post_to_nodes(entry)
   
   # Send the page
   handle_request_get(msgheader, sockobj, thiscommhandle)
 
-  send_to_vessels("SENTADD" + entry)
+# Check if message is sent from another Vessel
+# TODO Duplicated code... (See handle_request_change)
+  if not isFromVessel:
+    send_to_vessels("SENTADD" + entry)  
   
 # ------------------------------------------------------------------------------
 # Handles POST /Change request from browser
 # ------------------------------------------------------------------------------
 def handle_request_change(msgheader, sockobj, thiscommhandle):
   print "Received POST /Change"
-
   #increment logical clock
   mycontext['ts'] = mycontext['ts'] + 1
 
+  isFromVessel = msgheader.startswith( 'SENT' )
+
   #extract the query from the HTTP request  
-  query = extract_http_request_contents(msgheader)
+  if isFromVessel:
+    # Remove SENTADD/SENTDEL from msgheader.
+    query = extract_http_request_contents(msgheader[7:])
+  else:
+    query = extract_http_request_contents(msgheader)
+
   # extract the query parameters
   parameters = extract_parameters_from_query(query)
   print parameters
@@ -107,16 +130,21 @@ def handle_request_change(msgheader, sockobj, thiscommhandle):
   
   foundAdd = False
 
+
   if action == "Delete":
     for entry in mycontext['entrieslist']:
+      print entry[entry.find("&src_ts=") + 8: entry.find("&src_ip")] , str(ref_ts), \
+        entry[entry.find("&src_ip=") + 8: entry.find("&src_port")],ref_ip, \
+        entry[entry.find("&src_port=") + 10: entry.find("&action")],str(ref_port)
       #If ts, ip and port match then remove the comment
       if entry[entry.find("&src_ts=") + 8: entry.find("&src_ip")] == str(ref_ts) and \
         entry[entry.find("&src_ip=") + 8: entry.find("&src_port")] == ref_ip and \
         entry[entry.find("&src_port=") + 10: entry.find("&action")] == str(ref_port):
         mycontext['entrieslist'].remove(entry)
+        print "REMOVED: " + entry
         foundAdd = True
     #If comment not found, store delete for future use
-    if(foundAdd == False):
+    if foundAdd == False:
       # TODO This should be in the method handling other messages. 
       mycontext['notDeleted'].append(msgheader)
 
@@ -129,7 +157,10 @@ def handle_request_change(msgheader, sockobj, thiscommhandle):
   #Send the page
   handle_request_get(msgheader, sockobj, thiscommhandle)
 
-  send_to_vessels("SENTDELETE" + entry)
+  # Check if message is sent from another Vessel
+  if not isFromVessel:
+    # TODO For now, this only works for DELETE.
+    send_to_vessels("SENTDEL" + msgheader)
 
 
 # Sends a message to all vessels (except this)
