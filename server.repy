@@ -61,6 +61,8 @@ def handle_request_add(msgheader, sockobj, thiscommhandle):
   
   # Add to local store
   mycontext['entrieslist'].append(entry)
+
+  #send_post_to_nodes(entry)
   
   # Send the page
   handle_request_get(msgheader, sockobj, thiscommhandle)
@@ -85,11 +87,25 @@ def handle_request_change(msgheader, sockobj, thiscommhandle):
   ref_ip = parameters['ip']
   ref_port = int(parameters['port'])
   
-  print comment, action, ref_ts, ref_ip, ref_port
+  print "QUERY:", query, comment, action, ref_ts, ref_ip, ref_port
 
   # Process the query
   # TODO ...
-   
+  
+  foundAdd = False
+
+  if action == "Delete":
+    for entry in mycontext['entrieslist']:
+      #If ts, ip and port match then remove the comment
+      if entry[entry.find("&src_ts") + 7: entry.find("&src_ip")] == ref_ts and \
+        entry[entry.find("&src_ip") + 7: entry.find("&src_port")] == ref_ip and \
+        entry[entry.find("&src_port") + 9: entry.find("&action")] == ref_port:
+        mycontext['entriesList'].remove(entry)
+        foundAdd = True
+    #If comment not found, store delete for future use
+    if(foundAdd == False):
+      mycontext['notDeleted'].append(msgheader)
+
   # Save the src ip/port and timestamp of the query
   entry = "%s&src_ts=%u&src_ip=%s&src_port=%u" % (query, mycontext['ts'], mycontext['ip'], mycontext['port'])
 
@@ -98,6 +114,27 @@ def handle_request_change(msgheader, sockobj, thiscommhandle):
   
   #Send the page
   handle_request_get(msgheader, sockobj, thiscommhandle)
+
+# Sends a message to all vessels (except this)
+def send_to_vessels(entry):
+  for vessel in mycontext['vessels']:
+    if (vessel != getmyip()):
+      send_message(vessel, mycontext['port'], entry)
+ 
+# Sends a message to all ports (except this)
+def send_to_local_ports(entry):
+  for portnr in mycontext['localports']:
+    if(int(portnr) != mycontext['port']):
+      send_message('127.0.0.1', int(portnr), entry)
+
+# Sends a message to specific ip:port
+def send_message(ip, port, entry):
+  try:
+    socket = openconn(ip, port)
+    socket.send(entry)
+    socket.close()
+  except Exception, e:
+    print '-------SOCKET ERROR------\n' + str(e)
   
 # ------------------------------------------------------------------------------
 # Wrap into HTTP headers
@@ -219,5 +256,8 @@ if callfunc == 'initialize':
 
   #Initialize entrieslist to hold future board entries
   mycontext['entrieslist'] = []
+
+  #Initialized list of delete messages
+  mycontext['notDeleted'] = []
   
   start_board() 
