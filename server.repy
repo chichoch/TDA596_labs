@@ -57,7 +57,8 @@ def handle_request_add(msgheader, sockobj, thiscommhandle):
   # We use the HTML query format to store the entries locally
   # example:
   # comment=aa&src_ts=2&src_ip=127.0.0.1&src_port=63101&action=Add
-  entry = "comment=%s&src_ts=%u&src_ip=%s&src_port=%u&action=%s" % (comment, mycontext['ts'], mycontext['ip'], mycontext['port'], 'Add')
+  entry = "comment=%s&src_ts=%u&src_ip=%s&src_port=%u&action=%s" % \
+      (comment, mycontext['ts'], mycontext['ip'], mycontext['port'], 'Add')
   
   # Add to local store
   mycontext['entrieslist'].append(entry)
@@ -104,6 +105,7 @@ def handle_request_change(msgheader, sockobj, thiscommhandle):
         foundAdd = True
     #If comment not found, store delete for future use
     if(foundAdd == False):
+      # TODO This should be in the method handling other messages. 
       mycontext['notDeleted'].append(msgheader)
 
   # Save the src ip/port and timestamp of the query
@@ -117,15 +119,14 @@ def handle_request_change(msgheader, sockobj, thiscommhandle):
 
 # Sends a message to all vessels (except this)
 def send_to_vessels(entry):
-  for vessel in mycontext['vessels']:
-    if (vessel != getmyip()):
-      send_message(vessel, mycontext['port'], entry)
- 
-# Sends a message to all ports (except this)
-def send_to_local_ports(entry):
-  for portnr in mycontext['localports']:
-    if(int(portnr) != mycontext['port']):
-      send_message('127.0.0.1', int(portnr), entry)
+  if mycontext['connection'] == "remote":
+    for vessel in mycontext['vessels']:
+      if (vessel != getmyip()):
+        send_message(vessel, mycontext['port'], "SENT" + entry)
+  else:
+    for portnr in mycontext['localports']:
+      if(int(portnr) != mycontext['port']):
+        send_message('127.0.0.1', int(portnr), entry)
 
 # Sends a message to specific ip:port
 def send_message(ip, port, entry):
@@ -201,7 +202,8 @@ def generate_html_page(status=""):
   #Initialize blackboard content
   
   # dynamic title showing Ip address, port and up time.
-  board_title = '<div id="boardtitle_placeholder" class="boardtitle">Board contents at host: %s:%u, up time: %u sec.</div>' %(mycontext['ip'], mycontext['port'], int(getruntime()))  
+  board_title = '<div id="boardtitle_placeholder" class="boardtitle">Board contents at host: %s:%u, up time: %u sec.</div>'\
+           %(mycontext['ip'], mycontext['port'], int(getruntime()))  
   # An optional status message
   status_message = "<div class='status'>%s</div>" % (status)
   
@@ -211,7 +213,8 @@ def generate_html_page(status=""):
   
   # merging the contents of the board with the title
   # and wrapping all with <div id="boardcontents_placeholder”>...</div>
-  content = [mycontext['headerhtml'], '<div id="boardcontents_placeholder">', board_title, status_message, entries, '</div>', mycontext['footerhtml']]   
+  content = [mycontext['headerhtml'], '<div id="boardcontents_placeholder">', \
+     board_title, status_message, entries, '</div>', mycontext['footerhtml']]   
   
   #Concatenate strings into huge string representing the final html
   content = "".join(content)
@@ -227,7 +230,9 @@ if callfunc == 'initialize':
   # whenever this vessel gets a connection on its IPaddress:Clearinghouseport it'll call function board
   if len(callargs) == 1:
     port = int(callargs[0])
+    mycontext['vessels'] = open('ipaddresses.txt','r').read().split()
     ip = getmyip()
+    mycontext['connection'] = "remote"
 
   # To run locally: use the loopback ip address (127.0.0.1) and a port in the range 63100 .. 63110
   # If you start multiple local instances using different ports, you can debug and test your code locally
@@ -236,7 +241,9 @@ if callfunc == 'initialize':
   elif len(callargs) == 2:
     port = int(callargs[1])
     ip = callargs[0]
-  
+    mycontext['localports'] = open('localports.txt', 'r').read().split()
+    mycontext['connection'] = "local"
+
   # Fail if we don't have 1 or 2 arguments  
   else:
     raise Exception("Specify a port only for auto detection of IP, or specify IP and port")
