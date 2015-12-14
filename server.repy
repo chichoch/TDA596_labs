@@ -30,6 +30,10 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
       handle_request_add(msgheader, sockobj, thiscommhandle)
     elif msgheader.startswith( 'POST /Change' ):
       handle_request_change(msgheader, sockobj, thiscommhandle)
+    elif msg.startswith( 'SENTDELETE' ):
+      handle_request_from_vessel_delete(msgheader, sockobj, thiscommhandle)
+    elif msg.startswith( 'SENTADD' ):
+      handle_request_from_vessel_add(msgheader, sockobj, thiscommhandle)
   except Exception, e:
     print "Exception in board: %s, %s\n" %(type(e), e)
     raise
@@ -40,6 +44,12 @@ def handle_request_get(msgheader, sockobj, thiscommhandle):
   htmlresponse = generate_html_page("")
   sockobj.send(make_http_ok_response(htmlresponse))
   stopcomm(thiscommhandle)  
+
+def handle_request_from_vessel_delete(msgheader, sockobj, thiscommhandle):
+  
+
+def handle_request_from_vessel_add(msgheader, sockobj, thiscommhandle):
+
 
 # ------------------------------------------------------------------------------
 # Handles POST \Add request from browser
@@ -67,6 +77,8 @@ def handle_request_add(msgheader, sockobj, thiscommhandle):
   
   # Send the page
   handle_request_get(msgheader, sockobj, thiscommhandle)
+
+  send_to_vessels("SENTADD" + entry)
   
 # ------------------------------------------------------------------------------
 # Handles POST /Change request from browser
@@ -117,12 +129,15 @@ def handle_request_change(msgheader, sockobj, thiscommhandle):
   #Send the page
   handle_request_get(msgheader, sockobj, thiscommhandle)
 
+  send_to_vessels("SENTDELETE" + entry)
+
+
 # Sends a message to all vessels (except this)
 def send_to_vessels(entry):
   if mycontext['connection'] == "remote":
     for vessel in mycontext['vessels']:
       if (vessel != getmyip()):
-        send_message(vessel, mycontext['port'], "SENT" + entry)
+        send_message(vessel, mycontext['port'], entry)
   else:
     for portnr in mycontext['localports']:
       if(int(portnr) != mycontext['port']):
