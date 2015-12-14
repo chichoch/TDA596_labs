@@ -97,20 +97,20 @@ def handle_request_change(msgheader, sockobj, thiscommhandle):
   if action == "Delete":
     for entry in mycontext['entrieslist']:
       #If ts, ip and port match then remove the comment
-      if entry[entry.find("&src_ts") + 7: entry.find("&src_ip")] == ref_ts and \
-        entry[entry.find("&src_ip") + 7: entry.find("&src_port")] == ref_ip and \
-        entry[entry.find("&src_port") + 9: entry.find("&action")] == ref_port:
-        mycontext['entriesList'].remove(entry)
+      if entry[entry.find("&src_ts=") + 8: entry.find("&src_ip")] == str(ref_ts) and \
+        entry[entry.find("&src_ip=") + 8: entry.find("&src_port")] == ref_ip and \
+        entry[entry.find("&src_port=") + 10: entry.find("&action")] == str(ref_port):
+        mycontext['entrieslist'].remove(entry)
         foundAdd = True
     #If comment not found, store delete for future use
     if(foundAdd == False):
       mycontext['notDeleted'].append(msgheader)
 
   # Save the src ip/port and timestamp of the query
-  entry = "%s&src_ts=%u&src_ip=%s&src_port=%u" % (query, mycontext['ts'], mycontext['ip'], mycontext['port'])
+  e = "%s&src_ts=%u&src_ip=%s&src_port=%u" % (query, mycontext['ts'], mycontext['ip'], mycontext['port'])
 
   # Add query to local store
-  mycontext['entrieslist'].append(entry)
+  mycontext['entrieslist'].append(e)
   
   #Send the page
   handle_request_get(msgheader, sockobj, thiscommhandle)
