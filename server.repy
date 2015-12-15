@@ -26,12 +26,10 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
     if msgheader.startswith( 'GET' ):
       print "Received GET"
       handle_request_get(msgheader, sockobj, thiscommhandle)
-    # TODO Maybe "fulkod"? 4 cases, but 2 of them do the same thing.  
+    # TODO Maybe "fulkod"? 4 cases, but 2 of them do the same thing.  [FIXED WITH 'OR', OK?]
     elif msgheader.startswith( 'POST /Add' ):
       handle_request_add(msgheader, sockobj, thiscommhandle)
-    elif msgheader.startswith( 'POST /Change' ):
-      handle_request_change(msgheader, sockobj, thiscommhandle)
-    elif msgheader.startswith( 'SENTDEL' ):
+    elif msgheader.startswith( 'POST /Change' ) or msgheader.startswith( 'SENTDEL'):
       handle_request_change(msgheader, sockobj, thiscommhandle)
     elif msgheader.startswith( 'SENTADD' ):
       handle_request_add_from_vessel(msgheader, sockobj, thiscommhandle)
@@ -46,20 +44,34 @@ def handle_request_get(msgheader, sockobj, thiscommhandle):
   sockobj.send(make_http_ok_response(htmlresponse))
   stopcomm(thiscommhandle)  
 
+# ------------------------------------------------------------------------------
+# Handles add request from another vessel, outputs HTML string and closes socket.
+# ------------------------------------------------------------------------------
 def handle_request_add_from_vessel(msgheader, sockobj, thiscommhandle):
- # TODO What to do with logical clock?! Max(local) etc?!?!??!?!?!
-  mycontext['ts'] = mycontext['ts'] + 1
   
   comment = str(msgheader[msgheader.find("comment=") + 8:msgheader.find("&src_ts=")])
   ref_ts = int(msgheader[msgheader.find("&src_ts=") + 8:msgheader.find("&src_ip=")])
   ref_ip = msgheader[msgheader.find("&src_ip=") + 8:msgheader.find("&src_port=")]
   ref_port = int(msgheader[msgheader.find("&src_port=") + 10:msgheader.find("&action=")])
 
-  entry = "comment=%s&src_ts=%u&src_ip=%s&src_port=%u&action=%s" % \
+  mycontext['ts'] = max(mycontext['ts'], ref_ts)
+
+  commentDeleted = False
+
+  #We don't add the comment if we have already recieved a delete-post for it
+  for post in mycontext['unusedDelete']:
+    if post[post.find("&src_ts=") + 8: post.find("&src_ip")] == str(ref_ts) and \
+      post[post.find("&src_ip=") + 8: post.find("&src_port")] == ref_ip and \
+      post[post.find("&src_port=") + 10: post.find("&action")] == str(ref_port):
+      mycontext['unusedDelete'].remove(post)
+      commentDeleted = True
+
+
+  if not commentDeleted:
+    # Add to local store
+    entry = "comment=%s&src_ts=%u&src_ip=%s&src_port=%u&action=%s" % \
       (comment, ref_ts, ref_ip, ref_port, 'Add')
-  
-  # Add to local store
-  mycontext['entrieslist'].append(entry)
+    mycontext['entrieslist'].append(entry)
   
   # Send the page
   handle_request_get(msgheader, sockobj, thiscommhandle)
@@ -125,8 +137,6 @@ def handle_request_change(msgheader, sockobj, thiscommhandle):
   
   print "QUERY:", query, comment, action, ref_ts, ref_ip, ref_port
 
-  # Process the query
-  # TODO ...
   
   foundAdd = False
 
@@ -143,14 +153,15 @@ def handle_request_change(msgheader, sockobj, thiscommhandle):
         mycontext['entrieslist'].remove(entry)
         print "REMOVED: " + entry
         foundAdd = True
-    #If comment not found, store delete for future use
-    if foundAdd == False:
-      # TODO This should be in the method handling other messages. 
-      mycontext['notDeleted'].append(msgheader)
+    
 
   # Save the src ip/port and timestamp of the query
   e = "%s&src_ts=%u&src_ip=%s&src_port=%u" % (query, mycontext['ts'], mycontext['ip'], mycontext['port'])
 
+  #If comment not found, store delete for future use
+  if foundAdd == False and action == "Delete":
+    mycontext['unusedDelete'].append(e)
+  
   # Add query to local store
   mycontext['entrieslist'].append(e)
   
@@ -159,11 +170,12 @@ def handle_request_change(msgheader, sockobj, thiscommhandle):
 
   # Check if message is sent from another Vessel
   if not isFromVessel:
-    # TODO For now, this only works for DELETE.
-    send_to_vessels("SENTDEL" + msgheader)
+    if action == "Delete":
+      send_to_vessels("SENTDEL" + msgheader)
 
-
+# ------------------------------------------------------------------------------
 # Sends a message to all vessels (except this)
+# ------------------------------------------------------------------------------
 def send_to_vessels(entry):
   if mycontext['connection'] == "remote":
     for vessel in mycontext['vessels']:
@@ -174,7 +186,9 @@ def send_to_vessels(entry):
       if(int(portnr) != mycontext['port']):
         send_message('127.0.0.1', int(portnr), entry)
 
+# ------------------------------------------------------------------------------
 # Sends a message to specific ip:port
+# ------------------------------------------------------------------------------
 def send_message(ip, port, entry):
   try:
     socket = openconn(ip, port)
@@ -311,6 +325,6 @@ if callfunc == 'initialize':
   mycontext['entrieslist'] = []
 
   #Initialized list of delete messages
-  mycontext['notDeleted'] = []
+  mycontext['unusedDelete'] = []
   
   start_board() 
