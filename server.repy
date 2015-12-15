@@ -54,24 +54,29 @@ def handle_request_add_from_vessel(msgheader, sockobj, thiscommhandle):
   ref_ip = msgheader[msgheader.find("&src_ip=") + 8:msgheader.find("&src_port=")]
   ref_port = int(msgheader[msgheader.find("&src_port=") + 10:msgheader.find("&action=")])
 
+  #If the ts of the recieved request is larger than the local ts we store that one.
   mycontext['ts'] = max(mycontext['ts'], ref_ts)
 
   commentDeleted = False
 
   #We don't add the comment if we have already recieved a delete-post for it
+  mycontext['unused_deletes_lock'].acquire()
   for post in mycontext['unusedDelete']:
     if post[post.find("&src_ts=") + 8: post.find("&src_ip")] == str(ref_ts) and \
       post[post.find("&src_ip=") + 8: post.find("&src_port")] == ref_ip and \
       post[post.find("&src_port=") + 10: post.find("&action")] == str(ref_port):
       mycontext['unusedDelete'].remove(post)
       commentDeleted = True
+  mycontext['unused_deletes_lock'].release()
 
 
   if not commentDeleted:
     # Add to local store
     entry = "comment=%s&src_ts=%u&src_ip=%s&src_port=%u&action=%s" % \
       (comment, ref_ts, ref_ip, ref_port, 'Add')
+    mycontext['entrieslist_lock'].acquire()
     mycontext['entrieslist'].append(entry)
+    mycontext['entrieslist_lock'].release()
   
   # Send the page
   handle_request_get(msgheader, sockobj, thiscommhandle)
@@ -86,8 +91,10 @@ def handle_request_add(msgheader, sockobj, thiscommhandle):
   print isFromVessel
 
   #increment logical clock
+  mycontext['clock_lock'].acquire()
   mycontext['ts'] = mycontext['ts'] + 1
-  
+  mycontext['clock_lock'].release()
+
   #check if valid request (contains comment)
   comment=msgheader.split('comment=')[1]
   
@@ -99,7 +106,9 @@ def handle_request_add(msgheader, sockobj, thiscommhandle):
       (comment, mycontext['ts'], mycontext['ip'], mycontext['port'], 'Add')
   
   # Add to local store
+  mycontext['entrieslist_lock'].acquire()
   mycontext['entrieslist'].append(entry)
+  mycontext['entrieslist_lock'].release()
   
   # Send the page
   handle_request_get(msgheader, sockobj, thiscommhandle)
@@ -114,8 +123,6 @@ def handle_request_add(msgheader, sockobj, thiscommhandle):
 # ------------------------------------------------------------------------------
 def handle_request_change(msgheader, sockobj, thiscommhandle):
   print "Received POST /Change"
-  #increment logical clock
-  mycontext['ts'] = mycontext['ts'] + 1
 
   isFromVessel = msgheader.startswith( 'SENT' )
 
@@ -134,6 +141,14 @@ def handle_request_change(msgheader, sockobj, thiscommhandle):
   ref_ts = int(parameters['ts'])
   ref_ip = parameters['ip']
   ref_port = int(parameters['port'])
+
+  #increment logical clock
+  mycontext['clock_lock'].acquire()
+  if isFromVessel:
+    mycontext['ts'] = max(mycontext['ts'], ref_ts)
+  else:
+    mycontext['ts'] = mycontext['ts'] + 1
+  mycontext['clock_lock'].release()
   
   print "QUERY:", query, comment, action, ref_ts, ref_ip, ref_port
 
@@ -142,6 +157,7 @@ def handle_request_change(msgheader, sockobj, thiscommhandle):
 
 
   if action == "Delete":
+    mycontext['entrieslist_lock'].acquire()
     for entry in mycontext['entrieslist']:
       print entry[entry.find("&src_ts=") + 8: entry.find("&src_ip")] , str(ref_ts), \
         entry[entry.find("&src_ip=") + 8: entry.find("&src_port")],ref_ip, \
@@ -150,9 +166,12 @@ def handle_request_change(msgheader, sockobj, thiscommhandle):
       if entry[entry.find("&src_ts=") + 8: entry.find("&src_ip")] == str(ref_ts) and \
         entry[entry.find("&src_ip=") + 8: entry.find("&src_port")] == ref_ip and \
         entry[entry.find("&src_port=") + 10: entry.find("&action")] == str(ref_port):
+        
         mycontext['entrieslist'].remove(entry)
+        
         print "REMOVED: " + entry
         foundAdd = True
+    mycontext['entrieslist_lock'].release()
     
 
   # Save the src ip/port and timestamp of the query
@@ -160,10 +179,14 @@ def handle_request_change(msgheader, sockobj, thiscommhandle):
 
   #If comment not found, store delete for future use
   if foundAdd == False and action == "Delete":
+    mycontext['unused_deletes_lock'].acquire()
     mycontext['unusedDelete'].append(e)
+    mycontext['unused_deletes_lock'].release()
   
   # Add query to local store
+  mycontext['entrieslist_lock'].acquire()
   mycontext['entrieslist'].append(e)
+  mycontext['entrieslist_lock'].release()
   
   #Send the page
   handle_request_get(msgheader, sockobj, thiscommhandle)
@@ -268,7 +291,9 @@ def generate_html_page(status=""):
   status_message = "<div class='status'>%s</div>" % (status)
   
   # convert entries to html
+  mycontext['entrieslist_lock'].acquire()
   entries = [entry_to_html(e) for e in mycontext['entrieslist']]
+  mycontext['entrieslist_lock'].release()
   entries = "".join(entries)
   
   # merging the contents of the board with the title
@@ -326,5 +351,9 @@ if callfunc == 'initialize':
 
   #Initialized list of delete messages
   mycontext['unusedDelete'] = []
+
+  mycontext['entrieslist_lock'] = getlock()
+  mycontext['unused_deletes_lock'] = getlock()
+  mycontext['clock_lock'] = getlock()
   
   start_board() 
