@@ -21,7 +21,8 @@ def start_board():
 def board(ip, port, sockobj, thiscommhandle, listencommhandle):
   try:
     msgheader = sockobj.recv(1024) # Receive message
-    
+    if not msgheader.startswith('GET'):
+      print msgheader
     # React depending on message type: HTTP GET or POST, or some other type of communication.
     if msgheader.startswith( 'GET' ):
       print "Received GET"
@@ -52,7 +53,7 @@ def handle_request_add_from_vessel(msgheader, sockobj, thiscommhandle):
   comment = str(msgheader[msgheader.find("comment=") + 8:msgheader.find("&src_ts=")])
   ref_ts = int(msgheader[msgheader.find("&src_ts=") + 8:msgheader.find("&src_ip=")])
   ref_ip = msgheader[msgheader.find("&src_ip=") + 8:msgheader.find("&src_port=")]
-  ref_port = int(msgheader[msgheader.find("&src_port=") + 10:msgheader.find("&action=")])
+  ref_port = int(msgheader[msgheader.find("&src_port=") +  10:msgheader.find("&action=")])
 
   #If the ts of the recieved request is larger than the local ts we store that one.
   mycontext['ts'] = max(mycontext['ts'], ref_ts)
@@ -62,9 +63,13 @@ def handle_request_add_from_vessel(msgheader, sockobj, thiscommhandle):
   #We don't add the comment if we have already recieved a delete-post for it
   mycontext['unused_deletes_lock'].acquire()
   for post in mycontext['unusedDelete']:
-    if post[post.find("&src_ts=") + 8: post.find("&src_ip")] == str(ref_ts) and \
-      post[post.find("&src_ip=") + 8: post.find("&src_port")] == ref_ip and \
-      post[post.find("&src_port=") + 10: post.find("&action")] == str(ref_port):
+    print "POST::::: " + post
+    print post[post.find("&ts=") + 4: post.find("&ip")],str(ref_ts),\
+      post[post.find("&ip=") + 4: post.find("&port")] ,ref_ip , \
+      "SRC_PORT",post[post.find("&port=") + 6: post.find("&action")] ,"REF_PORT:", str(ref_port)
+    if post[post.find("&ts=") + 4: post.find("&ip")] == str(ref_ts) and \
+      post[post.find("&ip=") + 4: post.find("&port")] == ref_ip and \
+      post[post.find("&port=") + 6: post.find("&action")] == str(ref_port):
       mycontext['unusedDelete'].remove(post)
       commentDeleted = True
   mycontext['unused_deletes_lock'].release()
@@ -87,9 +92,6 @@ def handle_request_add_from_vessel(msgheader, sockobj, thiscommhandle):
 def handle_request_add(msgheader, sockobj, thiscommhandle):
   print "Received Add"
   
-  isFromVessel = msgheader.startswith( 'SENT' )
-  print isFromVessel
-
   #increment logical clock
   mycontext['clock_lock'].acquire()
   mycontext['ts'] = mycontext['ts'] + 1
@@ -113,17 +115,14 @@ def handle_request_add(msgheader, sockobj, thiscommhandle):
   # Send the page
   handle_request_get(msgheader, sockobj, thiscommhandle)
 
-# Check if message is sent from another Vessel
-# TODO Duplicated code... (See handle_request_change)
-  if not isFromVessel:
-    send_to_vessels("SENTADD" + entry)  
+  send_to_vessels("SENTADD" + entry)  
   
 # ------------------------------------------------------------------------------
 # Handles POST /Change request from browser
 # ------------------------------------------------------------------------------
 def handle_request_change(msgheader, sockobj, thiscommhandle):
   print "Received POST /Change"
-
+  print "\n---------------------------------\n" + msgheader + "\n ----------------------------------------\n"
   isFromVessel = msgheader.startswith( 'SENT' )
 
   #extract the query from the HTTP request  
