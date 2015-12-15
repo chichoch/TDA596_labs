@@ -63,10 +63,6 @@ def handle_request_add_from_vessel(msgheader, sockobj, thiscommhandle):
   #We don't add the comment if we have already recieved a delete-post for it
   mycontext['unused_deletes_lock'].acquire()
   for post in mycontext['unusedDelete']:
-    print "POST::::: " + post
-    print post[post.find("&ts=") + 4: post.find("&ip")],str(ref_ts),\
-      post[post.find("&ip=") + 4: post.find("&port")] ,ref_ip , \
-      "SRC_PORT",post[post.find("&port=") + 6: post.find("&action")] ,"REF_PORT:", str(ref_port)
     if post[post.find("&ts=") + 4: post.find("&ip")] == str(ref_ts) and \
       post[post.find("&ip=") + 4: post.find("&port")] == ref_ip and \
       post[post.find("&port=") + 6: post.find("&action")] == str(ref_port):
