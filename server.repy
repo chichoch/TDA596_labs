@@ -116,6 +116,7 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
       send_to_local_ports(message.toString())
 
   elif msgheader.startswith( 'BREAK' ):
+    mycontext['isJoined'] = False
     if mycontext['connection'] == "local":
       for v in mycontext['groupB']:
         if int(v) != mycontext['port']:
@@ -131,6 +132,7 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
       print "BREAK: ", mycontext['vessels']
   
   elif msgheader.startswith( 'JOIN' ):
+    mycontext['isJoined'] = True
     if mycontext['connection'] == "remote":
       for v in mycontext['groupB']:
         if v != mycontext['ip']:
@@ -176,7 +178,7 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
     if (msgheader != ''):
       # Create Message-object from String:
       message = message_from_string(msgheader)
-
+      print message.toString()
       #It is important to have mutex access to the clock
       mycontext['clock_lock'].acquire()
       # Set logical_clock to max(recv.seqNr,logical_clock)
@@ -186,27 +188,29 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
       # Insert the message in the list, sort it and update html-file.
       insert_message(message)
 
-      if mycontext['iamspecial']:
+      if mycontext['iamspecial'] and mycontext['isJoined']:
         if mycontext['connection'] == 'remote':
-          if ip in mycontext['groupA']
-            for v in mycontext['groupA']:
+          if message.ip in mycontext['groupA']:
+            for v in mycontext['groupB']:
               if v != mycontext['ip']:
                 send_message(msgheader)
-          elif ip in mycontext['groupB']
-            for v in mycontext['groupB']:
+          elif message.ip in mycontext['groupB']:
+            for v in mycontext['groupA']:
               if v != mycontext['ip']:
                 send_message(msgheader)   
 
         elif mycontext['connection'] == 'local':
-          if port in mycontext['groupA']
-            for v in mycontext['groupA']:
-              if v != str(mycontext['port']):
-                send_message(msgheader)
-          elif port in mycontext['groupB']
+          senderPort = message.sender[message.sender.find(':') + 1:]
+          print senderPort, "GROUPA: " + str(mycontext['groupA']), "GROUPB: " + str(mycontext['groupB']),\
+                "In group A: " + str(senderPort in mycontext['groupA']), "In group B: " + str(senderPort in mycontext['groupB'])
+          if senderPort in mycontext['groupA']:
             for v in mycontext['groupB']:
               if v != str(mycontext['port']):
-                send_message(msgheader)
-
+                send_message('127.0.0.1', int(v), msgheader)
+          elif senderPort in mycontext['groupB']:
+            for v in mycontext['groupA']:
+              if v != str(mycontext['port']):
+                send_message('127.0.0.1', int(v), msgheader)
 
   
 if callfunc == 'initialize':
@@ -237,6 +241,7 @@ if callfunc == 'initialize':
   mycontext['vessels'] = []
   mycontext['groupB'] = []
   mycontext['groupA'] = []
+  mycontext['isJoined'] = True
 
   if callargs[2] == 'AB':
     mycontext['iamspecial'] = True
