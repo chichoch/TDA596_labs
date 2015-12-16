@@ -1,12 +1,14 @@
 # Represents a blackboard-message.
 class Message:
-  def __init__(self, content, seqNr, sender):
+  def __init__(self, content, seqNr, sender, receiver):
     self.content = content
     self.seqNr = seqNr
     self.sender = sender
+    self.receiver = sender
 
   def toString(self):
-    return "MESSAGE:" + self.content + "Seq:" + str(self.seqNr) + "Sender:" + self.sender
+    return "MESSAGE:" + self.content + "Seq:" + str(self.seqNr) + "Sender:" +\
+       self.sender + "Receiver:" +self.receiver
 
 # Sort the message list first by sender and then by seq nr to assure same order on all vessels.
 def sort_messages():
