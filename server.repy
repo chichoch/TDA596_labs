@@ -76,11 +76,13 @@ def send_to_vessels(message):
 # Sends a message to all ports (except this)
 def send_to_local_ports(message):
   for portnr in mycontext['localports']:
-    if(int(portnr) != mycontext['port']):
+    if(int(portnr) != int(mycontext['port'])):
       message.setReceiver('127.0.0.1' + ':' + portnr)
       mycontext['noACKlist_lock'].acquire()
       mycontext['noACKlist'].append(message)
       mycontext['noACKlist_lock'].release()
+      
+      #TODO Detta gör att det inte skickas några meddelanden från 2:an?
       if mycontext['isJoined']:
         send_message('127.0.0.1', int(portnr), message.toString())
 
@@ -207,13 +209,19 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
   elif msgheader.startswith( 'ACK' ):
     message = message_from_string(msgheader)
     mycontext['noACKlist_lock'].acquire()
+    print "Received ACK FROM " + message.receiver
+    print "--------------"
+    for m in mycontext['noACKlist']:
+      print m.toString()
+
+    print "---------------"
     for mess in mycontext['noACKlist']:
       if mess.sender == message.sender and mess.receiver == message.receiver and \
               mess.content == message.content and mess.seqNr == message.seqNr:
         mycontext['noACKlist'].remove(mess)
-        print "MESSAGE REMOVED: " + mess.toString()
-      else:
-        print "!!!!!!!!!!!!!! MESSAGE NOT REMOVED: " + mess.toString() + "\n MESSAGE2 : ", message.toString()
+        #print "MESSAGE REMOVED: " + mess.toString()
+      #else:
+        #print "!!!!!!!!!!!!!! MESSAGE NOT REMOVED: " + mess.toString() + "\n MESSAGE2 : ", message.toString()
     mycontext['noACKlist_lock'].release()
   else:
     # Recieved a message.
