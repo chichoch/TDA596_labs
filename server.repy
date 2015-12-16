@@ -1,14 +1,14 @@
 # Represents a blackboard-message.
 class Message:
-  def __init__(self, content, seqNr, sender, receiver):
+  def __init__(self, content, seqNr, sender):
     self.content = content
     self.seqNr = seqNr
     self.sender = sender
-    self.receiver = sender
+   # self.receiver = sender
 
   def toString(self):
     return "MESSAGE:" + self.content + "Seq:" + str(self.seqNr) + "Sender:" +\
-       self.sender + "Receiver:" +self.receiver
+       self.sender #+ "Receiver:" +self.receiver
 
 # Sort the message list first by sender and then by seq nr to assure same order on all vessels.
 def sort_messages():
@@ -116,15 +116,60 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
       send_to_local_ports(message.toString())
 
   elif msgheader.startswith( 'BREAK' ):
-    for v in mycontext['groupB']:
-      mycontext['vessels'].remove(v)
-    print "BREAK: ", mycontext['vessels']
-
+    if mycontext['connection'] == "local":
+      for v in mycontext['groupB']:
+        if int(v) != mycontext['port']:
+          send_message(mycontext['ip'], int(v), "FORGETME&" + str(mycontext['port']))
+        mycontext['localports'].remove(v)
+      print "BREAK: ", mycontext['localports']
+    # Remote  
+    else:
+      for v in mycontext['groupB']:
+        if v != mycontext['ip']:
+          send_message(v, mycontext['port'], "FORGETME&" + mycontext['ip'])
+        mycontext['vessels'].remove(v)
+      print "BREAK: ", mycontext['vessels']
+  
   elif msgheader.startswith( 'JOIN' ):
-    mycontext['vessels'].extend(mycontext['groupB'])
-    print "JOIN: ", mycontext['vessels']
-
+    if mycontext['connection'] == "remote":
+      for v in mycontext['groupB']:
+        if v != mycontext['ip']:
+          send_message(v, mycontext['port'], "REMEMBERME&" + mycontext['ip'])   
+      mycontext['vessels'].extend(mycontext['groupB'])
+      print "JOIN: ", mycontext['vessels']
+    # Local  
+    else:
+      for v in mycontext['groupB']:
+        if int(v) != mycontext['port']:
+          send_message(mycontext['ip'], int(v), "REMEMBERME&" + str(mycontext['port']))
+      mycontext['localports'].extend(mycontext['groupB'])
+      print "JOIN: ", mycontext['localports']
     
+  elif msgheader.startswith( 'FORGETME' ):
+    if mycontext['connection'] == "remote":
+      mycontext['vessels'].remove(msgheader[msgheader.find("&") +1:])
+      print "REMOVED: " + msgheader[msgheader.find("&") +1:]
+      print "Vessels: ", mycontext['vessels']
+    
+    # Local
+    else:
+      print "-------------", msgheader, "----------------"
+      mycontext['localports'].remove(msgheader[msgheader.find("&") +1:])
+      print "REMOVED: " + msgheader[msgheader.find("&") +1:]
+      print "Ports: ", mycontext['localports']
+
+  elif msgheader.startswith( 'REMEMBERME'):
+    if mycontext['connection'] == "remote":
+      mycontext['vessels'].append(msgheader[msgheader.find("&") +1:])
+      print "ADDED: " + msgheader[msgheader.find("&") +1:]
+      print "Vessels: ", mycontext['vessels']
+
+    #Local
+    else:
+      mycontext['localports'].append(msgheader[msgheader.find("&") +1:])
+      print "ADDED: " + msgheader[msgheader.find("&") +1:]
+      print "Ports: ", mycontext['localports']
+
 
   else:
     # Recieved a message.
@@ -167,10 +212,9 @@ if callfunc == 'initialize':
   mycontext['list_lock'] = getlock()
 
   mycontext['message_counter'] = 0
-
+  mycontext['localports'] = []
   mycontext['vessels'] = []
   mycontext['groupB'] = []
-
 
   # Running remotely: 
   if callargs[0] == 'remote':
@@ -196,14 +240,14 @@ if callfunc == 'initialize':
     ip = '127.0.0.1'
     if callargs[2] == "A":
       #You're in group A
-      mycontext['vessels'] = open('localportsA.txt','r').read().split()  
+      mycontext['localports'] = open('localportsA.txt','r').read().split()  
     elif callargs[2] == "B":
       #You're in group B
-     mycontext['vessels'] = open('localportsB.txt','r').read().split()  
+     mycontext['localports'] = open('localportsB.txt','r').read().split()  
     elif callargs[2] == "AB":
       #You're in group A and B
-      mycontext['vessels'] = open('localportsA.txt','r').read().split()
-      mycontext['vessels'].extend(open('localportsB.txt','r').read().split())
+      mycontext['localports'] = open('localportsA.txt','r').read().split()
+      mycontext['localports'].extend(open('localportsB.txt','r').read().split())
       mycontext['groupB'] = open('localportsB.txt','r').read().split()
 
   else:
