@@ -186,6 +186,28 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
       # Insert the message in the list, sort it and update html-file.
       insert_message(message)
 
+      if mycontext['iamspecial']:
+        if mycontext['connection'] == 'remote':
+          if ip in mycontext['groupA']
+            for v in mycontext['groupA']:
+              if v != mycontext['ip']:
+                send_message(msgheader)
+          elif ip in mycontext['groupB']
+            for v in mycontext['groupB']:
+              if v != mycontext['ip']:
+                send_message(msgheader)   
+
+        elif mycontext['connection'] == 'local':
+          if port in mycontext['groupA']
+            for v in mycontext['groupA']:
+              if v != str(mycontext['port']):
+                send_message(msgheader)
+          elif port in mycontext['groupB']
+            for v in mycontext['groupB']:
+              if v != str(mycontext['port']):
+                send_message(msgheader)
+
+
   
 if callfunc == 'initialize':
   if len(callargs) != 3:
@@ -214,6 +236,12 @@ if callfunc == 'initialize':
   mycontext['localports'] = []
   mycontext['vessels'] = []
   mycontext['groupB'] = []
+  mycontext['groupA'] = []
+
+  if callargs[2] == 'AB':
+    mycontext['iamspecial'] = True
+  else:
+    mycontext['iamspecial'] = False
 
   # Running remotely: 
   if callargs[0] == 'remote':
@@ -231,6 +259,7 @@ if callfunc == 'initialize':
       mycontext['vessels'] = open('ipaddressesA.txt','r').read().split()
       mycontext['vessels'].extend(open('ipaddressesB.txt','r').read().split())
       mycontext['groupB'] = open('ipaddressesB.txt','r').read().split()
+      mycontext['groupA'] = open('ipaddressesA.txt','r').read().split()
 
 
   # Running locally.
@@ -248,6 +277,7 @@ if callfunc == 'initialize':
       mycontext['localports'] = open('localportsA.txt','r').read().split()
       mycontext['localports'].extend(open('localportsB.txt','r').read().split())
       mycontext['groupB'] = open('localportsB.txt','r').read().split()
+      mycontext['groupA'] = open('localportsA.txt','r').read().split()
 
   else:
     raise Exception("First argument needs to be 'remote' or 'local'")
