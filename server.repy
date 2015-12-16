@@ -178,7 +178,6 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
     if (msgheader != ''):
       # Create Message-object from String:
       message = message_from_string(msgheader)
-      print message.toString()
       #It is important to have mutex access to the clock
       mycontext['clock_lock'].acquire()
       # Set logical_clock to max(recv.seqNr,logical_clock)
@@ -201,8 +200,8 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
 
         elif mycontext['connection'] == 'local':
           senderPort = message.sender[message.sender.find(':') + 1:]
-          print senderPort, "GROUPA: " + str(mycontext['groupA']), "GROUPB: " + str(mycontext['groupB']),\
-                "In group A: " + str(senderPort in mycontext['groupA']), "In group B: " + str(senderPort in mycontext['groupB'])
+          #print senderPort, "GROUPA: " + str(mycontext['groupA']), "GROUPB: " + str(mycontext['groupB']),\
+          #      "In group A: " + str(senderPort in mycontext['groupA']), "In group B: " + str(senderPort in mycontext['groupB'])
           if senderPort in mycontext['groupA']:
             for v in mycontext['groupB']:
               if v != str(mycontext['port']):
