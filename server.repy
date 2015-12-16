@@ -17,10 +17,15 @@ class Message:
     self.sender = sender
 
 def resend_messages():
-  for message in mycontext['noACKlist']:
-    ip = message.receiver[:message.receiver.find(':')]
-    port = message.receiver[message.receiver.find(':') + 1:]
-    send_message(ip, int(port), message)
+  while True:
+    for message in mycontext['noACKlist']:
+      print "------NoACK List--------" , mycontext['noACKlist'], "-------------------"
+      if mycontext['isJoined']:  
+        print "RESENDING: " + message.toString()
+        ip = message.receiver[:message.receiver.find(':')]
+        port = message.receiver[message.receiver.find(':') + 1:]
+        send_message(ip, int(port), message.toString())
+    sleep(5)
 
 # Sort the message list first by sender and then by seq nr to assure same order on all vessels.
 def sort_messages():
@@ -264,9 +269,6 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
         if mycontext['isJoined']:
           send_message(ip,port,message.toString())
 
-      #TODO Resend all not yet acked posts!
-      resend_messages()
-
   
 if callfunc == 'initialize':
   if len(callargs) != 3:
@@ -345,5 +347,6 @@ if callfunc == 'initialize':
   else:
     raise Exception("First argument needs to be 'remote' or 'local'")
     
+  settimer(1, resend_messages, [])
   # Whenever this vessel gets a connection on its IPaddress:port it'll call function board
   listencommhandle = waitforconn(ip,port,board)
