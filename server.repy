@@ -115,9 +115,17 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
     else:
       send_to_local_ports(message.toString())
 
+  elif msgheader.startswith( 'BREAK' ):
+    for v in mycontext['groupB']:
+      mycontext['vessels'].remove(v)
+    print "BREAK: ", mycontext['vessels']
 
+  elif msgheader.startswith( 'JOIN' ):
+    mycontext['vessels'].extend(mycontext['groupB'])
+    print "JOIN: ", mycontext['vessels']
 
- 
+    
+
   else:
     # Recieved a message.
     # Ignore empty messages. (Can be caused by socket-errors etc.)
@@ -133,10 +141,11 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
 
       # Insert the message in the list, sort it and update html-file.
       insert_message(message)
+
   
 if callfunc == 'initialize':
-  if len(callargs) != 2:
-    raise Exception("Need two call arguments")
+  if len(callargs) != 3:
+    raise Exception("Need three call arguments")
 
   # Read and store the html file
   mycontext['index'] = open('index.html', 'r').read()
@@ -159,18 +168,43 @@ if callfunc == 'initialize':
 
   mycontext['message_counter'] = 0
 
+  mycontext['vessels'] = []
+  mycontext['groupB'] = []
+
+
   # Running remotely: 
   if callargs[0] == 'remote':
     # Read and store ip-addresses of other vessels
-    mycontext['vessels'] = open('ipaddresses.txt','r').read().split()  
     ip = getmyip()
     mycontext['ip'] = ip
+    if callargs[2] == "A":
+      #You're in group A
+      mycontext['vessels'] = open('ipaddressesA.txt','r').read().split()  
+    elif callargs[2] == "B":
+      #You're in group B
+     mycontext['vessels'] = open('ipaddressesB.txt','r').read().split()  
+    elif callargs[2] == "AB":
+      #You're in group A and B
+      mycontext['vessels'] = open('ipaddressesA.txt','r').read().split()
+      mycontext['vessels'].extend(open('ipaddressesB.txt','r').read().split())
+      mycontext['groupB'] = open('ipaddressesB.txt','r').read().split()
+
 
   # Running locally.
   elif callargs[0] == 'local':
     # Read and store the ports for running instances on localhost.
-    mycontext['localports'] = open('localports.txt', 'r').read().split()
     ip = '127.0.0.1'
+    if callargs[2] == "A":
+      #You're in group A
+      mycontext['vessels'] = open('localportsA.txt','r').read().split()  
+    elif callargs[2] == "B":
+      #You're in group B
+     mycontext['vessels'] = open('localportsB.txt','r').read().split()  
+    elif callargs[2] == "AB":
+      #You're in group A and B
+      mycontext['vessels'] = open('localportsA.txt','r').read().split()
+      mycontext['vessels'].extend(open('localportsB.txt','r').read().split())
+      mycontext['groupB'] = open('localportsB.txt','r').read().split()
 
   else:
     raise Exception("First argument needs to be 'remote' or 'local'")
