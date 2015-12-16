@@ -1,14 +1,26 @@
 # Represents a blackboard-message.
 class Message:
-  def __init__(self, content, seqNr, sender):
+  def __init__(self, content, seqNr, sender, receiver):
     self.content = content
     self.seqNr = seqNr
     self.sender = sender
-   # self.receiver = sender
+    self.receiver = receiver
 
   def toString(self):
     return "MESSAGE:" + self.content + "Seq:" + str(self.seqNr) + "Sender:" +\
-       self.sender #+ "Receiver:" +self.receiver
+       self.sender + "Receiver:" +self.receiver
+
+  def setReceiver(self, receiver):
+    self.receiver = receiver
+
+  def setSender(self, sender):
+    self.sender = sender
+
+def resend_messages():
+  for message in mycontext['noACKlist']:
+    ip = message.receiver[:message.receiver.find(':')]
+    port = message.receiver[message.receiver.find(':') + 1:]
+    send_message(ip, int(port), message)
 
 # Sort the message list first by sender and then by seq nr to assure same order on all vessels.
 def sort_messages():
@@ -47,13 +59,17 @@ def insert_message(message):
 def send_to_vessels(message):
   for vessel in mycontext['vessels']:
       if (vessel != getmyip()):
-        send_message(vessel, mycontext['port'], message)
+        message.setReceiver(vessel + ":" + mycontext['port'])
+        mycontext['noACKlist'].append(message)
+        send_message(vessel, mycontext['port'], message.toString())
         
 # Sends a message to all ports (except this)
 def send_to_local_ports(message):
   for portnr in mycontext['localports']:
     if(int(portnr) != mycontext['port']):
-      send_message('127.0.0.1', int(portnr), message)
+      message.setReceiver('127.0.0.1' + ':' + portnr)
+      mycontext['noACKlist'].append(message)
+      send_message('127.0.0.1', int(portnr), message.toString())
 
 # Sends a message to specific ip:port
 def send_message(ip, port, message):
@@ -67,8 +83,9 @@ def send_message(ip, port, message):
 def message_from_string(string):
   content = string[string.find("MESSAGE:") + 8 : string.find("Seq:")]
   seqNr = int(string[string.find("Seq:") + 4 : string.find("Sender:")])
-  sender = string[string.find("Sender:") + 7:]
-  return Message(content, seqNr, sender)
+  sender = string[string.find("Sender:") + 7:string.find("Receiver:")]
+  receiver = string[string.find("Receiver:") + 9:]
+  return Message(content, seqNr, sender, receiver)
 
 def board(ip, port, sockobj, thiscommhandle, listencommhandle):
   try:
@@ -95,7 +112,7 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
     #We have made a new comment, meaning we have to increase the clock.
     mycontext['logical_clock'] += 1
     #Create a message-object.
-    message = Message(comment, mycontext['logical_clock'], mycontext['ip'] + ":" + str(mycontext['port']))
+    message = Message(comment, mycontext['logical_clock'], mycontext['ip'] + ":" + str(mycontext['port']), "")
     mycontext['clock_lock'].release()
 
     #Insert the message to the html file
@@ -111,9 +128,9 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
 
     #Send message to vessels or ports, depending on which connection is used.
     if mycontext['connection'] == 'remote':
-      send_to_vessels(message.toString()) 
+      send_to_vessels(message) 
     else:
-      send_to_local_ports(message.toString())
+      send_to_local_ports(message)
 
   elif msgheader.startswith( 'BREAK' ):
     mycontext['isJoined'] = False
@@ -171,6 +188,14 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
       print "ADDED: " + msgheader[msgheader.find("&") +1:]
       print "Ports: ", mycontext['localports']
 
+  # We recieved an ACK from some message.
+  elif msgheader.startswith( 'ACK' ):
+    message = message_from_string(msgheader)
+    for mess in mycontext['noACKlist']:
+      if mess.sender == message.sender and mess.receiver == message.receiver and \
+              mess.content == message.content and mess.seqNr == message.seqNr:
+        mycontext['noACKlist'].remove(mess)
+    print "MESSAGE REMOVED: " + mess.toString()
 
   else:
     # Recieved a message.
@@ -178,6 +203,19 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
     if (msgheader != ''):
       # Create Message-object from String:
       message = message_from_string(msgheader)
+      print message.toString()
+
+      #SEND ACK
+      if mycontext['connection'] == 'remote':
+        ip = message.sender[:message.sender.find(':')]
+        port = mycontext['port']
+        send_message(ip, int(port), "ACK" + message.toString())
+      else:
+        # Local:
+        ip = '127.0.0.1'
+        port = message.sender[message.sender.find(':') + 1:]
+        send_message(ip, int(port), "ACK" + message.toString())
+
       #It is important to have mutex access to the clock
       mycontext['clock_lock'].acquire()
       # Set logical_clock to max(recv.seqNr,logical_clock)
@@ -187,8 +225,12 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
       # Insert the message in the list, sort it and update html-file.
       insert_message(message)
 
-      if mycontext['iamspecial'] and mycontext['isJoined']:
+      ## TODO MAKE THIS WORK THE SAME AS FOR LOCAL!!!
+      if mycontext['iamspecial']:
+        ip = ""
+        port = 0
         if mycontext['connection'] == 'remote':
+
           if message.ip in mycontext['groupA']:
             for v in mycontext['groupB']:
               if v != mycontext['ip']:
@@ -200,16 +242,30 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
 
         elif mycontext['connection'] == 'local':
           senderPort = message.sender[message.sender.find(':') + 1:]
+          ip = '127.0.0.1'
           #print senderPort, "GROUPA: " + str(mycontext['groupA']), "GROUPB: " + str(mycontext['groupB']),\
           #      "In group A: " + str(senderPort in mycontext['groupA']), "In group B: " + str(senderPort in mycontext['groupB'])
           if senderPort in mycontext['groupA']:
             for v in mycontext['groupB']:
               if v != str(mycontext['port']):
-                send_message('127.0.0.1', int(v), msgheader)
+                port = int(v)
+                message.setReceiver('127.0.0.1' + ':' + str(v))
+                message.setSender('127.0.0.1' + ':' + str(mycontext['port']))
+                mycontext['noACKlist'].append(message)
+                #send_message('127.0.0.1', int(v), message.toString())
           elif senderPort in mycontext['groupB']:
             for v in mycontext['groupA']:
               if v != str(mycontext['port']):
-                send_message('127.0.0.1', int(v), msgheader)
+                port = int(v)
+                message.setReceiver('127.0.0.1' + ':' + str(v))
+                message.setSender('127.0.0.1' + ':' + str(mycontext['port']))
+                mycontext['noACKlist'].append(message)
+                #send_message('127.0.0.1', int(v), message.toString())
+        if mycontext['isJoined']:
+          send_message(ip,port,message.toString())
+
+      #TODO Resend all not yet acked posts!
+      resend_messages()
 
   
 if callfunc == 'initialize':
@@ -235,12 +291,15 @@ if callfunc == 'initialize':
   mycontext['clock_lock'] = getlock()
   mycontext['list_lock'] = getlock()
 
-  mycontext['message_counter'] = 0
+  # Global variables for Task2part1:
   mycontext['localports'] = []
   mycontext['vessels'] = []
   mycontext['groupB'] = []
   mycontext['groupA'] = []
   mycontext['isJoined'] = True
+
+  #Global variables for Task2part2:
+  mycontext['noACKlist'] = []
 
   if callargs[2] == 'AB':
     mycontext['iamspecial'] = True
