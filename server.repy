@@ -153,7 +153,6 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
     
     # Local
     else:
-      print "-------------", msgheader, "----------------"
       mycontext['localports'].remove(msgheader[msgheader.find("&") +1:])
       print "REMOVED: " + msgheader[msgheader.find("&") +1:]
       print "Ports: ", mycontext['localports']
