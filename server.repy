@@ -64,27 +64,39 @@ def insert_message(message):
 
 # Sends a message to all vessels (except this)
 def send_to_vessels(message):
+  mycontext['noACKlist_lock'].acquire()
   for vessel in mycontext['vessels']:
       if (vessel != getmyip()):
         message.setReceiver(vessel + ":" + mycontext['port'])
-        mycontext['noACKlist_lock'].acquire()
         mycontext['noACKlist'].append(message)
-        mycontext['noACKlist_lock'].release()
         if mycontext['isJoined']:
           send_message(vessel, mycontext['port'], message.toString())
-        
+  mycontext['noACKlist_lock'].release()
+
 # Sends a message to all ports (except this)
 def send_to_local_ports(message):
+  counter = 0
   for portnr in mycontext['localports']:
+    print "PORTNUMBERS IN LOCALPORTS: " + str(portnr)
     if(int(portnr) != int(mycontext['port'])):
       message.setReceiver('127.0.0.1' + ':' + portnr)
       mycontext['noACKlist_lock'].acquire()
-      mycontext['noACKlist'].append(message)
+      if message not in mycontext['noACKlist'] and mycontext['iamspecial']:  
+        mycontext['noACKlist'].append(message)
+        send_message('127.0.0.1', int(portnr), message.toString())
+      elif not mycontext['iamspecial'] and mycontext['isJoined']:
+        mycontext['noACKlist'].append(message)
+        send_message('127.0.0.1', int(portnr), message.toString())
+      elif not mycontext['iamspecial'] and not mycontext['isJoined']:
+        mycontext['noACKlist'].append(message)
+      counter = counter +1
+      print "SENT MESSAGE. Counter: " + str(counter)
       mycontext['noACKlist_lock'].release()
       
+      
       #TODO Detta gör att det inte skickas några meddelanden från 2:an?
-      if mycontext['isJoined']:
-        send_message('127.0.0.1', int(portnr), message.toString())
+      #if mycontext['isJoined']:
+      #  send_message('127.0.0.1', int(portnr), message.toString())
 
 # Sends a message to specific ip:port
 def send_message(ip, port, message):
@@ -180,6 +192,7 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
       print "JOIN: ", mycontext['localports']
     
   elif msgheader.startswith( 'FORGETME' ):
+    print "FORGET ME"
     mycontext['isJoined'] = False
     #if mycontext['connection'] == "remote":
       #mycontext['vessels'].remove(msgheader[msgheader.find("&") +1:])
@@ -193,6 +206,7 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
       #print "Ports: ", mycontext['localports']
 
   elif msgheader.startswith( 'REMEMBERME'):
+    print "REMEMBER ME"
     mycontext['isJoined'] = True
     #if mycontext['connection'] == "remote":
     #  mycontext['vessels'].append(msgheader[msgheader.find("&") +1:])
@@ -223,6 +237,9 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
       #else:
         #print "!!!!!!!!!!!!!! MESSAGE NOT REMOVED: " + mess.toString() + "\n MESSAGE2 : ", message.toString()
     mycontext['noACKlist_lock'].release()
+ 
+
+
   else:
     # Recieved a message.
     # Ignore empty messages. (Can be caused by socket-errors etc.)
