@@ -69,27 +69,35 @@ def insert_message(message):
 def send_to_vessels(message):
   mycontext['noACKlist_lock'].acquire()
   for vessel in mycontext['vessels']:
-      print vessel + " == " + getmyip() + ' EQUALS ' + str(vessel != getmyip())
       if (vessel != getmyip()):
         message.setReceiver(vessel + ":" + str(mycontext['port']))
-      
-        if message not in mycontext['noACKlist'] and mycontext['iamspecial']:  
-          mycontext['noACKlist'].append(message)
-          send_message(vessel, mycontext['port'], message.toString())
-        elif not mycontext['iamspecial'] and mycontext['isJoined']:
-          mycontext['noACKlist'].append(message)
-          send_message(vessel, mycontext['port'], message.toString())
-        elif not mycontext['iamspecial'] and not mycontext['isJoined']:
-          mycontext['noACKlist'].append(message)
+        tempMess = Message(message.content, message.seqNr, message.sender, message.receiver)
+        mycontext['noACKlist'].append(tempMess)
+        send_message(vessel, int(mycontext['port']), tempMess.toString())
+  
+  # This can only happen for group B... 
+  if not mycontext['isJoined'] and not mycontext['iamspecial']:
+    # Save message to sent to SPECIAL vessel.
+    tempMess = Message(message.content, message.seqNr, message.sender, message.receiver)
+    print "FORGOTTEN = " + mycontext['forgotten'] + "!"
+    tempMess.setReceiver(mycontext['forgotten'] + ':' + str(mycontext['port']))
+    mycontext['noACKlist'].append(tempMess)
+
+  # If we are special vessel and not joined.
+  elif not mycontext['isJoined'] and mycontext['iamspecial']:
+    for v in mycontext['groupB']:
+      if (v != getmyip()):
+        tempMess = Message(message.content, message.seqNr, message.sender, message.receiver)
+        tempMess.setReceiver(v + ":" + str(mycontext['port']))
+        mycontext['noACKlist'].append(tempMess)
+
   mycontext['noACKlist_lock'].release()
-  #resend_messages()
 
 # Sends a message to all ports (except this)
 def send_to_local_ports(message):
   counter = 0
   mycontext['noACKlist_lock'].acquire()
   for portnr in mycontext['localports']:
-    print "PORTNUMBERS IN LOCALPORTS: " + str(portnr)
     if(int(portnr) != int(mycontext['port'])):
       message.setReceiver('127.0.0.1' + ':' + portnr)
       tempMess = Message(message.content, message.seqNr, message.sender, message.receiver)
@@ -267,9 +275,6 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
         mycontext['noACKlist'].remove(mess)
     except Exception, e:
       print "not found"
-        #print "MESSAGE REMOVED: " + mess.toString()
-      #else:
-        #print "!!!!!!!!!!!!!! MESSAGE NOT REMOVED: " + mess.toString() + "\n MESSAGE2 : ", message.toString()
     mycontext['noACKlist_lock'].release()
  
 
@@ -316,10 +321,10 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
                 ip = v
                 message.setReceiver(v + ':' + str(port))
                 message.setSender(mycontext['ip'] + ':' + str(port))
-                if message not in mycontext['noACKlist']:  
-                  mycontext['noACKlist'].append(message)
+                tempMess = Message(message.content, message.seqNr, message.sender, message.receiver)
+                mycontext['noACKlist'].append(tempMess)
                 if mycontext['isJoined']:
-                  send_message(ip,port,message.toString())
+                  send_message(ip,port,tempMess.toString())
                 #send_message(msgheader)
           elif senderIP in mycontext['groupB'] and senderIP != getmyip():
             for v in mycontext['groupA']:
@@ -327,17 +332,16 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
                 ip = v
                 message.setReceiver(v + ':' + str(port))
                 message.setSender(mycontext['ip'] + ':' + str(port))
-                if message not in mycontext['noACKlist']:  
-                  mycontext['noACKlist'].append(message)
+                tempMess = Message(message.content, message.seqNr, message.sender, message.receiver)
+
+                mycontext['noACKlist'].append(tempMess)
                 if mycontext['isJoined']:
-                  send_message(ip,port,message.toString())  
+                  send_message(ip,port,tempMess.toString())  
           mycontext['noACKlist_lock'].release()
 
         elif mycontext['connection'] == 'local':
           senderPort = message.sender[message.sender.find(':') + 1:]
           ip = '127.0.0.1'
-          #print senderPort, "GROUPA: " + str(mycontext['groupA']), "GROUPB: " + str(mycontext['groupB']),\
-          #      "In group A: " + str(senderPort in mycontext['groupA']), "In group B: " + str(senderPort in mycontext['groupB'])
           mycontext['noACKlist_lock'].acquire()
           if senderPort in mycontext['groupA'] and senderPort != mycontext['port']:
             for v in mycontext['groupB']:
@@ -345,30 +349,24 @@ def board(ip, port, sockobj, thiscommhandle, listencommhandle):
                 port = int(v)
                 message.setReceiver('127.0.0.1' + ':' + str(v))
                 message.setSender('127.0.0.1' + ':' + str(mycontext['port']))
-                #if message not in mycontext['noACKlist']:
                 tempMess1 = Message(message.content, message.seqNr, message.sender, message.receiver)
                 mycontext['noACKlist'].append(tempMess1)
                 if mycontext['isJoined']:
                   send_message(ip,port,tempMess1.toString())
-                #send_message('127.0.0.1', int(v), message.toString())
           elif senderPort in mycontext['groupB'] and senderPort != mycontext['port']:
             for v in mycontext['groupA']:
               if v != str(mycontext['port']):
                 port = int(v)
                 message.setReceiver('127.0.0.1' + ':' + str(v))
                 message.setSender('127.0.0.1' + ':' + str(mycontext['port']))
-                #if message not in mycontext['noACKlist']:
                 tempMess2 = Message(message.content, message.seqNr, message.sender, message.receiver)
                 mycontext['noACKlist'].append(tempMess2)
                 if mycontext['isJoined']:
                   send_message(ip,port,tempMess2.toString())
-                #send_message('127.0.0.1', int(v), message.toString())
           mycontext['noACKlist_lock'].release()
-        #if mycontext['isJoined']:
-        #  send_message(ip,port,message.toString())
-    #resend_messages()
 
-  
+
+# ============================ INITIALIZE ============================  
 if callfunc == 'initialize':
   if len(callargs) != 3:
     raise Exception("Need three call arguments")
