@@ -54,7 +54,8 @@ def insert_message(message):
   # Locks are used to assure mutual exclusion of the list. 
   mycontext['list_lock'].acquire()
   # Adds the message to the list.
-  mycontext['local_message_list'].append(message)
+  if message not in mycontext['local_message_list']:
+    mycontext['local_message_list'].append(message)
   # Sort the list first on seqNr and then IP-address.
   sort_messages()
 
