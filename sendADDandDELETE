@@ -1,0 +1,2 @@
+$'SENTDEL Content-Length: 59\r\ncomment=TEST&ts=1&ip=128.220.231.4&port=63119&action=Delete'
+$'SENTADD comment=TEST&src_ts=1&src_ip=128.220.231.4&src_port=63119&action=Add'
